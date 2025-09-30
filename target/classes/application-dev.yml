@@ -1,0 +1,32 @@
+# Development Environment Configuration
+spring:
+    r2dbc:
+        url: r2dbc:mysql://localhost:3306/quickcommerce_dev
+        username: inventory_user
+        password: dev_password
+
+    redis:
+        host: localhost
+        port: 6379
+
+    rabbitmq:
+        host: localhost
+        port: 5672
+        username: guest
+        password: guest
+
+logging:
+    level:
+        com.quickcommerce.inventory: DEBUG
+        org.springframework.r2dbc: DEBUG
+        org.springframework.web.reactive: DEBUG
+        reactor.netty: DEBUG
+
+server:
+    port: 8081
+
+management:
+    endpoints:
+        web:
+            exposure:
+                include: "*"

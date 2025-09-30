@@ -1,0 +1,52 @@
+# Production Environment Configuration
+spring:
+    r2dbc:
+        url: r2dbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        pool:
+            initial-size: 20
+            max-size: 50
+            max-idle-time: 30m
+
+    redis:
+        host: ${REDIS_HOST}
+        port: ${REDIS_PORT}
+        password: ${REDIS_PASSWORD}
+        lettuce:
+            pool:
+                max-active: 20
+                max-idle: 10
+                min-idle: 5
+
+    rabbitmq:
+        host: ${RABBITMQ_HOST}
+        port: ${RABBITMQ_PORT}
+        username: ${RABBITMQ_USERNAME}
+        password: ${RABBITMQ_PASSWORD}
+
+logging:
+    level:
+        com.quickcommerce.inventory: INFO
+        org.springframework.r2dbc: WARN
+        org.springframework.security: WARN
+        reactor.netty: WARN
+        root: WARN
+    file:
+        name: /var/log/inventory-service/inventory-service.log
+
+server:
+    port: 8081
+    netty:
+        connection-timeout: 30s
+        idle-timeout: 60s
+        max-connections: 2000
+
+management:
+    endpoints:
+        web:
+            exposure:
+                include: health,info,metrics,prometheus
+    tracing:
+        sampling:
+            probability: 0.1
