@@ -37,6 +37,8 @@ This service provides real-time inventory management capabilities including:
 
 ### API Endpoints
 - `GET /api/v1/inventory/sku/{sku}` - Get inventory by SKU
+- `POST /api/v1/inventory/availability` - **NEW** Check availability for multiple SKUs
+- `GET /api/v1/inventory/availability/single` - **NEW** Check availability for single SKU
 - `POST /api/v1/inventory/reserve` - Reserve stock for checkout
 - `POST /api/v1/inventory/reservations/{id}/confirm` - Confirm reservation
 - `POST /api/v1/inventory/reservations/{id}/cancel` - Cancel reservation
@@ -169,6 +171,54 @@ curl -X POST http://localhost:8081/api/v1/inventory/stock/add \
 ### Get Low Stock Items
 ```bash
 curl http://localhost:8081/api/v1/inventory/low-stock?storeId=1
+```
+
+### Check Inventory Availability (Multiple SKUs)
+```bash
+# Check availability for multiple products in a store
+curl -X POST http://localhost:8081/api/v1/inventory/availability \
+  -H "Content-Type: application/json" \
+  -d '{
+    "storeId": 1,
+    "skus": ["SKU001", "SKU002", "SKU003"]
+  }'
+```
+
+### Check Single Inventory Availability
+```bash
+# Check availability for a single product in a store
+curl "http://localhost:8081/api/v1/inventory/availability/single?storeId=1&sku=SKU001"
+```
+
+**Response Example:**
+```json
+{
+  "storeId": 1,
+  "products": [
+    {
+      "sku": "SKU001",
+      "productId": 101,
+      "currentStock": 25,
+      "availableStock": 23,
+      "reservedStock": 2,
+      "safetyStock": 5,
+      "inStock": true,
+      "lowStock": false,
+      "availabilityStatus": "AVAILABLE"
+    },
+    {
+      "sku": "SKU002",
+      "productId": 102,
+      "currentStock": 3,
+      "availableStock": 3,
+      "reservedStock": 0,
+      "safetyStock": 5,
+      "inStock": true,
+      "lowStock": true,
+      "availabilityStatus": "LOW_STOCK"
+    }
+  ]
+}
 ```
 
 ## Database Schema

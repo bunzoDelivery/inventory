@@ -77,4 +77,16 @@ public interface InventoryItemRepository extends ReactiveCrudRepository<Inventor
      * Find items with stock above threshold
      */
     Flux<InventoryItem> findByCurrentStockGreaterThan(Integer threshold);
+
+    /**
+     * Find inventory items by store ID and SKU list
+     */
+    @Query("SELECT * FROM inventory_items WHERE store_id = :storeId AND sku IN (:skus)")
+    Flux<InventoryItem> findByStoreIdAndSkuIn(Long storeId, java.util.List<String> skus);
+
+    /**
+     * Find inventory item by store ID and SKU
+     */
+    @Query("SELECT * FROM inventory_items WHERE store_id = :storeId AND sku = :sku")
+    Mono<InventoryItem> findByStoreIdAndSku(Long storeId, String sku);
 }

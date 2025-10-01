@@ -22,7 +22,9 @@ C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\con
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\event\StockMovementEvent.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\config\WebFluxConfiguration.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\domain\StockMovement.java
+C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\dto\InventoryAvailabilityResponse.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\event\LowStockAlertEvent.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\domain\InventoryItem.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\repository\StockMovementRepository.java
 C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\config\SecurityConfiguration.java
+C:\prashant\qComAf\repos\inventory\src\main\java\com\quickcommerce\inventory\dto\InventoryAvailabilityRequest.java

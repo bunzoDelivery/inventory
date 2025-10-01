@@ -4,6 +4,7 @@ import com.quickcommerce.inventory.domain.InventoryItem;
 import com.quickcommerce.inventory.domain.StockMovement;
 import com.quickcommerce.inventory.domain.StockReservation;
 import com.quickcommerce.inventory.dto.AddStockRequest;
+import com.quickcommerce.inventory.dto.InventoryAvailabilityResponse;
 import com.quickcommerce.inventory.dto.ReserveStockRequest;
 import com.quickcommerce.inventory.dto.StockReservationResponse;
 import com.quickcommerce.inventory.event.LowStockAlertEvent;
@@ -28,6 +29,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -297,5 +299,46 @@ public class InventoryService {
 
     private String generateReservationId() {
         return "RES_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /**
+     * Check inventory availability for multiple SKUs in a store
+     * This is a scalable API that can handle bulk availability checks
+     */
+    public Mono<InventoryAvailabilityResponse> checkInventoryAvailability(Long storeId, List<String> skus) {
+        log.info("Checking inventory availability for store: {} and SKUs: {}", storeId, skus);
+
+        if (skus == null || skus.isEmpty()) {
+            return Mono.just(InventoryAvailabilityResponse.builder()
+                    .storeId(storeId)
+                    .products(List.of())
+                    .build());
+        }
+
+        return inventoryItemRepository.findByStoreIdAndSkuIn(storeId, skus)
+                .collectList()
+                .map(items -> {
+                    log.debug("Found {} items for store {} and SKUs {}", items.size(), storeId, skus);
+                    return InventoryAvailabilityResponse.fromInventoryItems(storeId, items);
+                })
+                .doOnNext(response -> log.info("Availability check completed for store {} with {} products",
+                        storeId, response.getProducts().size()));
+    }
+
+    /**
+     * Check inventory availability for a single SKU in a store
+     * Convenience method for single product checks
+     */
+    public Mono<InventoryAvailabilityResponse> checkSingleInventoryAvailability(Long storeId, String sku) {
+        log.info("Checking inventory availability for store: {} and SKU: {}", storeId, sku);
+
+        return inventoryItemRepository.findByStoreIdAndSku(storeId, sku)
+                .map(item -> InventoryAvailabilityResponse.fromInventoryItems(storeId, List.of(item)))
+                .switchIfEmpty(Mono.just(InventoryAvailabilityResponse.builder()
+                        .storeId(storeId)
+                        .products(List.of())
+                        .build()))
+                .doOnNext(response -> log.info("Single availability check completed for store {} and SKU {}", storeId,
+                        sku));
     }
 }
