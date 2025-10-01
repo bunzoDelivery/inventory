@@ -2,6 +2,8 @@ package com.quickcommerce.inventory.controller;
 
 import com.quickcommerce.inventory.domain.InventoryItem;
 import com.quickcommerce.inventory.dto.AddStockRequest;
+import com.quickcommerce.inventory.dto.InventoryAvailabilityRequest;
+import com.quickcommerce.inventory.dto.InventoryAvailabilityResponse;
 import com.quickcommerce.inventory.dto.InventoryItemResponse;
 import com.quickcommerce.inventory.dto.ReserveStockRequest;
 import com.quickcommerce.inventory.dto.StockReservationResponse;
@@ -17,6 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * REST controller for inventory management operations
@@ -132,6 +136,40 @@ public class InventoryController {
                 .map(ResponseEntity::ok)
                 .onErrorReturn(InventoryNotFoundException.class, ResponseEntity.notFound().build())
                 .doOnNext(response -> log.debug("Retrieved inventory by barcode: {}", barcode));
+    }
+
+    /**
+     * Check inventory availability for multiple SKUs in a store
+     * This is the scalable API for bulk availability checks
+     */
+    @PostMapping("/availability")
+    public Mono<ResponseEntity<InventoryAvailabilityResponse>> checkInventoryAvailability(
+            @Valid @RequestBody InventoryAvailabilityRequest request) {
+
+        log.info("Checking inventory availability for store: {} and SKUs: {}",
+                request.getStoreId(), request.getSkus());
+
+        return inventoryService.checkInventoryAvailability(request.getStoreId(), request.getSkus())
+                .map(ResponseEntity::ok)
+                .doOnNext(response -> log.info("Availability check completed for store {} with {} SKUs",
+                        request.getStoreId(), request.getSkus().size()));
+    }
+
+    /**
+     * Check inventory availability for a single SKU in a store
+     * Convenience endpoint for single product checks
+     */
+    @GetMapping("/availability/single")
+    public Mono<ResponseEntity<InventoryAvailabilityResponse>> checkSingleInventoryAvailability(
+            @RequestParam Long storeId,
+            @RequestParam String sku) {
+
+        log.info("Checking single inventory availability for store: {} and SKU: {}", storeId, sku);
+
+        return inventoryService.checkSingleInventoryAvailability(storeId, sku)
+                .map(ResponseEntity::ok)
+                .doOnNext(response -> log.info("Single availability check completed for store {} and SKU {}", storeId,
+                        sku));
     }
 
     /**
