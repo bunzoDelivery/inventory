@@ -1,0 +1,55 @@
+.DS_Store
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+/.idea/*
+**/.idea/*
+*.iws
+*.iml
+*.ipr
+
+# Keep our code style #
+#!/.idea/codeStyles/codeStyleConfig.xml
+#!/.idea/codeStyles/Project.xml
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+
+*.html
+
+# GitHub Enterprise API file with secrets
+github-enterprise.http
+
+## Other
+**/__pycache__/
+TestDataGenerator/output/*
+
+# Ignore Maven/Gradle build output
+**/target/
+*.class
+.cursor/*
