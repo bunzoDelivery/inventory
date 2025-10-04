@@ -49,11 +49,11 @@ public interface InventoryItemRepository extends ReactiveCrudRepository<Inventor
     Mono<Integer> updateCurrentStockWithVersion(Long id, Integer newStock, Long version);
 
     /**
-     * Update reserved stock
+     * Update reserved stock by incrementing (atomic operation)
      */
     @Modifying
-    @Query("UPDATE inventory_items SET reserved_stock = :newReservedStock, version = version + 1, last_updated = CURRENT_TIMESTAMP WHERE id = :id")
-    Mono<Integer> updateReservedStock(Long id, Integer newReservedStock);
+    @Query("UPDATE inventory_items SET reserved_stock = reserved_stock + :increment, version = version + 1, last_updated = CURRENT_TIMESTAMP WHERE id = :id")
+    Mono<Integer> incrementReservedStock(Long id, Integer increment);
 
     /**
      * Update both current and reserved stock

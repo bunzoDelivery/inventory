@@ -13,6 +13,11 @@ spring:
             max-acquire-time: 30s
             max-create-connection-time: 30s
 
+    # Disable scheduling for tests
+    task:
+        scheduling:
+            enabled: false
+
     # RabbitMQ Configuration (disabled for service tests)
     rabbitmq:
         host: localhost
@@ -21,6 +26,11 @@ spring:
         password: guest
         virtual-host: /
         connection-timeout: 15000
+
+    # Disable RabbitMQ auto-configuration for tests
+    autoconfigure:
+        exclude:
+            - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
     # JPA/Hibernate (disabled for R2DBC)
     jpa:
