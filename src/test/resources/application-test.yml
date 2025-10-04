@@ -1,31 +1,67 @@
-# Test Environment Configuration
+# Test-specific configuration
 spring:
+    # Database Configuration (will be overridden by Testcontainers)
     r2dbc:
-        url: r2dbc:h2:mem:///testdb?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-        username: sa
-        password: password
+        url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:test_inventory}
+        username: ${DB_USERNAME:test}
+        password: ${DB_PASSWORD:test}
+        pool:
+            enabled: true
+            initial-size: 5
+            max-size: 10
+            max-idle-time: 30m
+            max-acquire-time: 30s
+            max-create-connection-time: 30s
 
-    redis:
-        host: localhost
-        port: 6379
-
+    # RabbitMQ Configuration (disabled for service tests)
     rabbitmq:
         host: localhost
         port: 5672
         username: guest
         password: guest
+        virtual-host: /
+        connection-timeout: 15000
 
+    # JPA/Hibernate (disabled for R2DBC)
+    jpa:
+        hibernate:
+            ddl-auto: none
+        show-sql: false
+
+    # Liquibase (disabled for tests)
+    liquibase:
+        enabled: false
+
+    # SQL Scripts (disabled - we'll create schema programmatically)
+    sql:
+        init:
+            mode: never
+
+    # Security Configuration (disabled for tests)
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ""
+
+# Logging Configuration
 logging:
     level:
+        root: INFO
         com.quickcommerce.inventory: DEBUG
-        org.springframework.r2dbc: DEBUG
-        org.springframework.web.reactive: DEBUG
+        org.springframework.data.r2dbc: DEBUG
+        org.testcontainers: INFO
 
+# Server Configuration
 server:
     port: 0 # Random port for tests
 
+# Management endpoints
 management:
     endpoints:
         web:
             exposure:
-                include: health,info
+                include: health
+    endpoint:
+        health:
+            show-details: always

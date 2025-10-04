@@ -20,7 +20,6 @@ import com.quickcommerce.inventory.repository.StockReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,24 +44,16 @@ public class InventoryService {
     private final InventoryItemRepository inventoryItemRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockReservationRepository stockReservationRepository;
-    private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
-    private static final String INVENTORY_CACHE_PREFIX = "inventory:";
-    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
     private static final Duration RESERVATION_TTL = Duration.ofMinutes(15);
 
     /**
-     * Get inventory item by SKU with caching
+     * Get inventory item by SKU
      */
     public Mono<InventoryItem> getInventoryBySku(String sku) {
-        String cacheKey = INVENTORY_CACHE_PREFIX + sku;
-
-        return getCachedInventory(cacheKey)
-                .switchIfEmpty(
-                        inventoryItemRepository.findBySku(sku)
-                                .flatMap(item -> cacheInventory(cacheKey, item))
-                                .switchIfEmpty(Mono.error(new InventoryNotFoundException("SKU not found: " + sku))));
+        return inventoryItemRepository.findBySku(sku)
+                .switchIfEmpty(Mono.error(new InventoryNotFoundException("SKU not found: " + sku)));
     }
 
     /**
@@ -111,7 +102,6 @@ public class InventoryService {
                                         .then(createStockMovement(item.getId(), reservation.getQuantity(),
                                                 StockMovement.MovementType.OUTBOUND, StockMovement.ReferenceType.SALE,
                                                 reservation.getOrderId(), "Order confirmed"))
-                                        .then(invalidateCache(INVENTORY_CACHE_PREFIX + item.getSku()))
                                         .then(checkLowStockAlert(item));
                             });
                 });
@@ -136,8 +126,7 @@ public class InventoryService {
                                         .then(createStockMovement(item.getId(), reservation.getQuantity(),
                                                 StockMovement.MovementType.UNRESERVE,
                                                 StockMovement.ReferenceType.RESERVATION,
-                                                reservationId, "Reservation cancelled"))
-                                        .then(invalidateCache(INVENTORY_CACHE_PREFIX + item.getSku()));
+                                                reservationId, "Reservation cancelled"));
                             });
                 });
     }
@@ -158,8 +147,7 @@ public class InventoryService {
                             .then(createStockMovement(item.getId(), request.getQuantity(),
                                     StockMovement.MovementType.INBOUND,
                                     StockMovement.ReferenceType.PURCHASE, request.getReferenceId(),
-                                    request.getReason()))
-                            .then(invalidateCache(INVENTORY_CACHE_PREFIX + request.getSku()));
+                                    request.getReason()));
                 });
     }
 
@@ -215,35 +203,7 @@ public class InventoryService {
                 .then(updateReservedStock(item.getId(), item.getReservedStock() + request.getQuantity()))
                 .then(createStockMovement(item.getId(), request.getQuantity(), StockMovement.MovementType.RESERVE,
                         StockMovement.ReferenceType.RESERVATION, reservationId, "Stock reservation"))
-                .then(invalidateCache(INVENTORY_CACHE_PREFIX + item.getSku()))
                 .then(Mono.just(StockReservationResponse.fromDomain(reservation, item.getSku())));
-    }
-
-    private Mono<InventoryItem> getCachedInventory(String cacheKey) {
-        return redisTemplate.opsForValue().get(cacheKey)
-                .cast(InventoryItem.class)
-                .onErrorResume(e -> {
-                    log.warn("Error getting cached inventory: {}", e.getMessage());
-                    return Mono.empty();
-                });
-    }
-
-    private Mono<InventoryItem> cacheInventory(String cacheKey, InventoryItem item) {
-        return redisTemplate.opsForValue().set(cacheKey, item, CACHE_TTL)
-                .then(Mono.just(item))
-                .onErrorResume(e -> {
-                    log.warn("Error caching inventory: {}", e.getMessage());
-                    return Mono.just(item);
-                });
-    }
-
-    private Mono<Void> invalidateCache(String cacheKey) {
-        return redisTemplate.delete(cacheKey)
-                .then()
-                .onErrorResume(e -> {
-                    log.warn("Error invalidating cache: {}", e.getMessage());
-                    return Mono.empty();
-                });
     }
 
     private Mono<Void> updateReservedStock(Long itemId, Integer newReservedStock) {
