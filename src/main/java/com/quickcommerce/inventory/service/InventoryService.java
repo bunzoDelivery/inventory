@@ -116,18 +116,13 @@ public class InventoryService {
         return stockReservationRepository.findByReservationId(reservationId)
                 .switchIfEmpty(Mono.error(new ReservationNotFoundException("Reservation not found: " + reservationId)))
                 .flatMap(reservation -> {
-                    return inventoryItemRepository.findById(reservation.getInventoryItemId())
-                            .flatMap(item -> {
-                                int newReservedStock = item.getReservedStock() - reservation.getQuantity();
-
-                                return updateReservedStock(item.getId(), newReservedStock)
-                                        .then(updateReservationStatus(reservationId,
-                                                StockReservation.ReservationStatus.CANCELLED))
-                                        .then(createStockMovement(item.getId(), reservation.getQuantity(),
-                                                StockMovement.MovementType.UNRESERVE,
-                                                StockMovement.ReferenceType.RESERVATION,
-                                                reservationId, "Reservation cancelled"));
-                            });
+                    return incrementReservedStock(reservation.getInventoryItemId(), -reservation.getQuantity())
+                            .then(updateReservationStatus(reservationId,
+                                    StockReservation.ReservationStatus.CANCELLED))
+                            .then(createStockMovement(reservation.getInventoryItemId(), reservation.getQuantity(),
+                                    StockMovement.MovementType.UNRESERVE,
+                                    StockMovement.ReferenceType.RESERVATION,
+                                    reservationId, "Reservation cancelled"));
                 });
     }
 
@@ -200,14 +195,14 @@ public class InventoryService {
                 .build();
 
         return stockReservationRepository.save(reservation)
-                .then(updateReservedStock(item.getId(), item.getReservedStock() + request.getQuantity()))
+                .then(incrementReservedStock(item.getId(), request.getQuantity()))
                 .then(createStockMovement(item.getId(), request.getQuantity(), StockMovement.MovementType.RESERVE,
                         StockMovement.ReferenceType.RESERVATION, reservationId, "Stock reservation"))
                 .then(Mono.just(StockReservationResponse.fromDomain(reservation, item.getSku())));
     }
 
-    private Mono<Void> updateReservedStock(Long itemId, Integer newReservedStock) {
-        return inventoryItemRepository.updateReservedStock(itemId, newReservedStock)
+    private Mono<Void> incrementReservedStock(Long itemId, Integer increment) {
+        return inventoryItemRepository.incrementReservedStock(itemId, increment)
                 .filter(updated -> updated > 0)
                 .switchIfEmpty(Mono.error(new RuntimeException("Failed to update reserved stock")))
                 .then();
