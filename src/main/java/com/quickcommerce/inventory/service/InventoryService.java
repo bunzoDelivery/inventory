@@ -14,9 +14,12 @@ import com.quickcommerce.inventory.exception.InventoryNotFoundException;
 import com.quickcommerce.inventory.exception.InvalidReservationException;
 import com.quickcommerce.inventory.exception.OptimisticLockingException;
 import com.quickcommerce.inventory.exception.ReservationNotFoundException;
+import com.quickcommerce.inventory.domain.Store;
+import com.quickcommerce.inventory.dto.NearestStoreResponse;
 import com.quickcommerce.inventory.repository.InventoryItemRepository;
 import com.quickcommerce.inventory.repository.StockMovementRepository;
 import com.quickcommerce.inventory.repository.StockReservationRepository;
+import com.quickcommerce.inventory.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,6 +47,7 @@ public class InventoryService {
     private final InventoryItemRepository inventoryItemRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockReservationRepository stockReservationRepository;
+    private final StoreRepository storeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     private static final Duration RESERVATION_TTL = Duration.ofMinutes(15);
@@ -295,5 +299,40 @@ public class InventoryService {
                         .build()))
                 .doOnNext(response -> log.info("Single availability check completed for store {} and SKU {}", storeId,
                         sku));
+    }
+
+    /**
+     * Find nearest store with inventory for requested SKUs
+     * This is the key API for quick commerce - determines which store can fulfill the order
+     *
+     * @param latitude Customer's latitude
+     * @param longitude Customer's longitude
+     * @param skus List of SKUs to check availability
+     * @return Nearest store with inventory availability and delivery estimate
+     */
+    public Mono<NearestStoreResponse> findNearestStoreWithInventory(Double latitude, Double longitude, List<String> skus) {
+        log.info("Finding nearest store for location: ({}, {}) with {} SKUs", latitude, longitude, skus.size());
+
+        return storeRepository.findNearestStore(latitude, longitude)
+                .switchIfEmpty(Mono.error(new InventoryNotFoundException("No stores available in your area")))
+                .flatMap(store -> {
+                    log.debug("Nearest store found: {} at distance: {} km",
+                            store.getName(), store.calculateDistanceKm(latitude, longitude));
+
+                    // Check if location is serviceable
+                    if (!store.isLocationServiceable(latitude, longitude)) {
+                        return Mono.error(new InventoryNotFoundException(
+                                String.format("Location is outside serviceable area. Nearest store is %.2f km away (max: %d km)",
+                                        store.calculateDistanceKm(latitude, longitude),
+                                        store.getServiceableRadiusKm())));
+                    }
+
+                    // Check inventory availability for requested SKUs
+                    return checkInventoryAvailability(store.getId(), skus)
+                            .map(availability -> NearestStoreResponse.fromStore(store, latitude, longitude, availability))
+                            .doOnNext(response -> log.info("Nearest store response: storeId={}, distance={} km, ETA={} min, items={}",
+                                    response.getStoreId(), response.getDistanceKm(),
+                                    response.getEstimatedDeliveryMinutes(), response.getInventoryAvailability().getProducts().size()));
+                });
     }
 }
