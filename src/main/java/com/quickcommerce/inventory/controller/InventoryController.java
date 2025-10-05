@@ -5,6 +5,8 @@ import com.quickcommerce.inventory.dto.AddStockRequest;
 import com.quickcommerce.inventory.dto.InventoryAvailabilityRequest;
 import com.quickcommerce.inventory.dto.InventoryAvailabilityResponse;
 import com.quickcommerce.inventory.dto.InventoryItemResponse;
+import com.quickcommerce.inventory.dto.NearestStoreRequest;
+import com.quickcommerce.inventory.dto.NearestStoreResponse;
 import com.quickcommerce.inventory.dto.ReserveStockRequest;
 import com.quickcommerce.inventory.dto.StockReservationResponse;
 import com.quickcommerce.inventory.exception.InsufficientStockException;
@@ -170,6 +172,26 @@ public class InventoryController {
                 .map(ResponseEntity::ok)
                 .doOnNext(response -> log.info("Single availability check completed for store {} and SKU {}", storeId,
                         sku));
+    }
+
+    /**
+     * Find nearest store with inventory for requested SKUs
+     * Critical API for quick commerce - determines which store can fulfill order
+     */
+    @PostMapping("/nearest-store")
+    public Mono<ResponseEntity<NearestStoreResponse>> findNearestStoreWithInventory(
+            @Valid @RequestBody NearestStoreRequest request) {
+
+        log.info("Finding nearest store for location: ({}, {}) with {} SKUs",
+                request.getLatitude(), request.getLongitude(), request.getSkus().size());
+
+        return inventoryService.findNearestStoreWithInventory(
+                        request.getLatitude(),
+                        request.getLongitude(),
+                        request.getSkus())
+                .map(ResponseEntity::ok)
+                .onErrorReturn(InventoryNotFoundException.class, ResponseEntity.notFound().build())
+                .doOnNext(response -> log.info("Nearest store lookup completed: status={}", response.getStatusCode()));
     }
 
     /**

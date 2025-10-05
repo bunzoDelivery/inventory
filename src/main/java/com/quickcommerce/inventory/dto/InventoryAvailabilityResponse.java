@@ -19,6 +19,19 @@ public class InventoryAvailabilityResponse {
 
     private Long storeId;
     private List<ProductAvailability> products;
+    private StoreInfo storeInfo; // Optional: Only populated for nearest-store queries
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StoreInfo {
+        private String storeName;
+        private String storeAddress;
+        private Double distanceKm;
+        private Integer estimatedDeliveryMinutes;
+        private Boolean isServiceable;
+    }
 
     @Data
     @NoArgsConstructor

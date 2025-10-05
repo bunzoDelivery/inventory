@@ -1,15 +1,15 @@
 package com.quickcommerce.inventory;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
-@ActiveProfiles("test")
-class InventoryServiceApplicationTests {
+/**
+ * Integration test to verify Spring application context loads successfully
+ */
+class InventoryServiceApplicationTests extends BaseContainerTest {
 
     @Test
     void contextLoads() {
         // This test ensures that the Spring application context loads successfully
+        // with all beans configured properly including database, repositories, etc.
     }
 }

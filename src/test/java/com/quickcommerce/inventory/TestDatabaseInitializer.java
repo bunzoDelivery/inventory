@@ -17,6 +17,8 @@ public class TestDatabaseInitializer {
         System.out.println("Starting database schema initialization...");
         return dropExistingTables()
                 .doOnSuccess(v -> System.out.println("Dropped existing tables"))
+                .then(createStoresTable())
+                .doOnSuccess(v -> System.out.println("Stores table created"))
                 .then(createInventoryItemsTable())
                 .doOnSuccess(v -> System.out.println("Inventory items table created"))
                 .then(createStockReservationsTable())
@@ -45,6 +47,37 @@ public class TestDatabaseInitializer {
                         .rowsUpdated())
                 .then(r2dbcEntityTemplate.getDatabaseClient()
                         .sql("DROP TABLE IF EXISTS inventory_items")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("DROP TABLE IF EXISTS stores")
+                        .fetch()
+                        .rowsUpdated())
+                .then();
+    }
+
+    private Mono<Void> createStoresTable() {
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("""
+                        CREATE TABLE IF NOT EXISTS stores (
+                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            name VARCHAR(255) NOT NULL,
+                            address VARCHAR(500),
+                            latitude DECIMAL(10, 8) NOT NULL,
+                            longitude DECIMAL(11, 8) NOT NULL,
+                            serviceable_radius_km INT DEFAULT 5,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                        )
+                        """)
+                .fetch()
+                .rowsUpdated()
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("""
+                                INSERT INTO stores (id, name, address, latitude, longitude, serviceable_radius_km, is_active)
+                                VALUES (1, 'Lusaka Dark Store 1', 'Plot 5, Great East Road, Lusaka', -15.3875, 28.3228, 5, TRUE)
+                                """)
                         .fetch()
                         .rowsUpdated())
                 .then();
