@@ -54,30 +54,7 @@ public abstract class BaseContainerTest {
     void setUp() {
         // Initialize database schema and clean up before each test
         testDatabaseInitializer.initializeSchema().block();
-        cleanupDatabase();
-    }
-
-    /**
-     * Clean up test database
-     */
-    public void cleanupDatabase() {
-        try {
-            r2dbcEntityTemplate.getDatabaseClient()
-                    .sql("DELETE FROM stock_reservations")
-                    .fetch()
-                    .rowsUpdated()
-                    .then(r2dbcEntityTemplate.getDatabaseClient()
-                            .sql("DELETE FROM inventory_movements")
-                            .fetch()
-                            .rowsUpdated())
-                    .then(r2dbcEntityTemplate.getDatabaseClient()
-                            .sql("DELETE FROM inventory_items")
-                            .fetch()
-                            .rowsUpdated())
-                    .block();
-        } catch (Exception e) {
-            log.warn("Failed to cleanup database: {}", e.getMessage());
-        }
+        testDatabaseInitializer.clearAllData().block();
     }
 
     /**

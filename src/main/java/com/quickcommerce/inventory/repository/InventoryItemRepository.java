@@ -56,6 +56,27 @@ public interface InventoryItemRepository extends ReactiveCrudRepository<Inventor
     Mono<Integer> incrementReservedStock(Long id, Integer increment);
 
     /**
+     * Atomically reserve stock with availability check
+     * This prevents race conditions by checking and reserving in ONE atomic operation
+     *
+     * Returns:
+     * - 1 if reservation succeeded (stock was available and reserved)
+     * - 0 if reservation failed (insufficient stock)
+     *
+     * This is the CRITICAL method for preventing overselling in concurrent scenarios
+     */
+    @Modifying
+    @Query("""
+        UPDATE inventory_items
+        SET reserved_stock = reserved_stock + :quantity,
+            version = version + 1,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE id = :id
+          AND (current_stock - reserved_stock) >= :quantity
+        """)
+    Mono<Integer> reserveStockAtomic(Long id, Integer quantity);
+
+    /**
      * Update both current and reserved stock
      */
     @Modifying

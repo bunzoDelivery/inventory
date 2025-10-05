@@ -25,6 +25,8 @@ public class TestDatabaseInitializer {
                 .doOnSuccess(v -> System.out.println("Stock reservations table created"))
                 .then(createInventoryMovementsTable())
                 .doOnSuccess(v -> System.out.println("Inventory movements table created"))
+                .then(createStockAlertsTable())
+                .doOnSuccess(v -> System.out.println("Stock alerts table created"))
                 .doOnSuccess(v -> System.out.println("Database schema initialized successfully"))
                 .doOnError(e -> {
                     System.err.println("Failed to initialize database schema: " + e.getMessage());
@@ -38,11 +40,19 @@ public class TestDatabaseInitializer {
 
     private Mono<Void> dropExistingTables() {
         return r2dbcEntityTemplate.getDatabaseClient()
-                .sql("DROP TABLE IF EXISTS inventory_movements")
+                .sql("SET FOREIGN_KEY_CHECKS = 0")
                 .fetch()
                 .rowsUpdated()
                 .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("DROP TABLE IF EXISTS inventory_movements")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
                         .sql("DROP TABLE IF EXISTS stock_reservations")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("DROP TABLE IF EXISTS stock_alerts")
                         .fetch()
                         .rowsUpdated())
                 .then(r2dbcEntityTemplate.getDatabaseClient()
@@ -51,6 +61,38 @@ public class TestDatabaseInitializer {
                         .rowsUpdated())
                 .then(r2dbcEntityTemplate.getDatabaseClient()
                         .sql("DROP TABLE IF EXISTS stores")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("SET FOREIGN_KEY_CHECKS = 1")
+                        .fetch()
+                        .rowsUpdated())
+                .then();
+    }
+
+    public Mono<Void> clearAllData() {
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SET FOREIGN_KEY_CHECKS = 0")
+                .fetch()
+                .rowsUpdated()
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("TRUNCATE TABLE inventory_movements")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("TRUNCATE TABLE stock_reservations")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("TRUNCATE TABLE stock_alerts")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("TRUNCATE TABLE inventory_items")
+                        .fetch()
+                        .rowsUpdated())
+                .then(r2dbcEntityTemplate.getDatabaseClient()
+                        .sql("SET FOREIGN_KEY_CHECKS = 1")
                         .fetch()
                         .rowsUpdated())
                 .then();
@@ -140,6 +182,26 @@ public class TestDatabaseInitializer {
                             reason VARCHAR(255),
                             created_by VARCHAR(255),
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                        """)
+                .fetch()
+                .rowsUpdated()
+                .then();
+    }
+
+    private Mono<Void> createStockAlertsTable() {
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("""
+                        CREATE TABLE IF NOT EXISTS stock_alerts (
+                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            inventory_item_id BIGINT NOT NULL,
+                            alert_type VARCHAR(50) NOT NULL,
+                            severity VARCHAR(20) NOT NULL,
+                            message VARCHAR(500),
+                            is_resolved BOOLEAN DEFAULT FALSE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            resolved_at TIMESTAMP NULL,
+                            FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id)
                         )
                         """)
                 .fetch()

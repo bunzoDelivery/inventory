@@ -62,6 +62,7 @@ public class InventoryService {
 
     /**
      * Reserve stock for checkout process
+     * Uses atomic check-and-reserve to prevent race conditions and overselling
      */
     public Mono<StockReservationResponse> reserveStock(ReserveStockRequest request) {
         log.info("Reserving stock for SKU: {}, Quantity: {}, Customer: {}, Order: {}",
@@ -69,15 +70,7 @@ public class InventoryService {
 
         return inventoryItemRepository.findBySku(request.getSku())
                 .switchIfEmpty(Mono.error(new InventoryNotFoundException("SKU not found: " + request.getSku())))
-                .flatMap(item -> {
-                    if (!item.isAvailableForReservation(request.getQuantity())) {
-                        return Mono.error(new InsufficientStockException(
-                                String.format("Insufficient stock for SKU: %s. Available: %d, Requested: %d",
-                                        request.getSku(), item.getAvailableStock(), request.getQuantity())));
-                    }
-
-                    return reserveStockInternal(item, request);
-                });
+                .flatMap(item -> reserveStockAtomic(item, request));
     }
 
     /**
@@ -183,7 +176,11 @@ public class InventoryService {
 
     // Private helper methods
 
-    private Mono<StockReservationResponse> reserveStockInternal(InventoryItem item, ReserveStockRequest request) {
+    /**
+     * Atomically reserve stock with race condition prevention
+     * This method ensures that stock check and reservation happen atomically at the database level
+     */
+    private Mono<StockReservationResponse> reserveStockAtomic(InventoryItem item, ReserveStockRequest request) {
         String reservationId = generateReservationId();
         LocalDateTime expiresAt = LocalDateTime.now().plus(RESERVATION_TTL);
 
@@ -198,11 +195,34 @@ public class InventoryService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
+        // Step 1: Create reservation record
         return stockReservationRepository.save(reservation)
-                .then(incrementReservedStock(item.getId(), request.getQuantity()))
-                .then(createStockMovement(item.getId(), request.getQuantity(), StockMovement.MovementType.RESERVE,
-                        StockMovement.ReferenceType.RESERVATION, reservationId, "Stock reservation"))
-                .then(Mono.just(StockReservationResponse.fromDomain(reservation, item.getSku())));
+                // Step 2: Atomically check availability AND reserve (prevents race conditions)
+                .then(inventoryItemRepository.reserveStockAtomic(item.getId(), request.getQuantity()))
+                .flatMap(rowsAffected -> {
+                    if (rowsAffected == 0) {
+                        // Atomic update failed = insufficient stock
+                        // Rollback: delete the reservation record
+                        log.warn("Insufficient stock for SKU: {}. Atomic reservation failed. Available: {}, Requested: {}",
+                                request.getSku(), item.getAvailableStock(), request.getQuantity());
+
+                        return stockReservationRepository.delete(reservation)
+                                .then(Mono.error(new InsufficientStockException(
+                                        String.format("Insufficient stock for SKU: %s. Available: %d, Requested: %d",
+                                                request.getSku(), item.getAvailableStock(), request.getQuantity()))));
+                    }
+
+                    // Success! Stock was atomically reserved
+                    log.info("Successfully reserved {} units of SKU: {} for order: {}",
+                            request.getQuantity(), request.getSku(), request.getOrderId());
+
+                    // Step 3: Create audit trail
+                    return createStockMovement(item.getId(), request.getQuantity(),
+                                    StockMovement.MovementType.RESERVE,
+                                    StockMovement.ReferenceType.RESERVATION,
+                                    reservationId, "Stock reservation")
+                            .then(Mono.just(StockReservationResponse.fromDomain(reservation, item.getSku())));
+                });
     }
 
     private Mono<Void> incrementReservedStock(Long itemId, Integer increment) {

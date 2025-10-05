@@ -2,7 +2,7 @@ spring:
     application:
         name: inventory-service
 
-    # R2DBC Database Configuration
+    # R2DBC Database Configuration (for reactive operations)
     r2dbc:
         url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}
         username: ${DB_USERNAME:inventory_user}
@@ -14,6 +14,17 @@ spring:
             max-create-connection-time: 60s
             max-acquire-time: 60s
             max-life-time: 30m
+
+    # Flyway Database Migration (uses JDBC, not R2DBC)
+    flyway:
+        enabled: ${FLYWAY_ENABLED:true}
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}?allowPublicKeyRetrieval=true&useSSL=false
+        user: ${DB_USERNAME:inventory_user}
+        password: ${DB_PASSWORD:secure_password}
+        locations: classpath:db/migration
+        baseline-on-migrate: true
+        baseline-version: 0
+        validate-on-migrate: true
 
     # RabbitMQ Configuration
     rabbitmq:

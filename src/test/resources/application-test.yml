@@ -42,6 +42,10 @@ spring:
     liquibase:
         enabled: false
 
+    # Flyway (disabled for tests - we use TestDatabaseInitializer)
+    flyway:
+        enabled: false
+
     # SQL Scripts (disabled - we'll create schema programmatically)
     sql:
         init:
