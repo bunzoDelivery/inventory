@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -308,6 +309,161 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
                 .assertNext(item -> {
                     assertThat(item.getCurrentStock()).isEqualTo(100);
                     assertThat(item.getReservedStock()).isEqualTo(80); // 40 + 40
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("RACE CONDITION TEST: Should prevent overselling when 3 customers try to buy 1 item with only 1 available")
+    void shouldPreventOversellingWithRaceCondition_OneItemThreeCustomers() {
+        // Given - Create item with ONLY 1 available
+        createTestInventoryItem("SKU_RACE_1", 999L, 1L, 1, 0); // current=1, reserved=0
+
+        ReserveStockRequest req1 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_1")
+                .quantity(1)
+                .customerId("111")
+                .orderId("ORDER_A")
+                .build();
+
+        ReserveStockRequest req2 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_1")
+                .quantity(1)
+                .customerId("222")
+                .orderId("ORDER_B")
+                .build();
+
+        ReserveStockRequest req3 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_1")
+                .quantity(1)
+                .customerId("333")
+                .orderId("ORDER_C")
+                .build();
+
+        // When - All 3 customers try to reserve simultaneously
+        var result1 = inventoryService.reserveStock(req1);
+        var result2 = inventoryService.reserveStock(req2);
+        var result3 = inventoryService.reserveStock(req3);
+
+        // Merge all results and collect successes and failures
+        var results = Flux.merge(
+                result1.map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED"),
+                result2.map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED"),
+                result3.map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED")
+        ).collectList();
+
+        // Then - Exactly 1 should succeed, 2 should fail
+        StepVerifier.create(results)
+                .assertNext(list -> {
+                    long successCount = list.stream().filter(s -> s.equals("SUCCESS")).count();
+                    long failedCount = list.stream().filter(s -> s.equals("FAILED")).count();
+
+                    assertThat(successCount).isEqualTo(1); // Only 1 succeeded
+                    assertThat(failedCount).isEqualTo(2);  // 2 failed due to insufficient stock
+                })
+                .verifyComplete();
+
+        // Verify final state: reserved_stock should be exactly 1 (not 2 or 3)
+        StepVerifier.create(inventoryService.getInventoryBySku("SKU_RACE_1"))
+                .assertNext(item -> {
+                    assertThat(item.getCurrentStock()).isEqualTo(1);
+                    assertThat(item.getReservedStock()).isEqualTo(1); // CRITICAL: Must be 1, not 2 or 3
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("RACE CONDITION TEST: Should handle 3 customers trying to buy 1 each with only 2 available")
+    void shouldPreventOversellingWithRaceCondition_TwoItemsThreeCustomers() {
+        // Given - Create item with ONLY 2 available
+        createTestInventoryItem("SKU_RACE_2", 998L, 1L, 2, 0); // current=2, reserved=0
+
+        ReserveStockRequest req1 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_2")
+                .quantity(1)
+                .customerId("111")
+                .orderId("ORDER_X")
+                .build();
+
+        ReserveStockRequest req2 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_2")
+                .quantity(1)
+                .customerId("222")
+                .orderId("ORDER_Y")
+                .build();
+
+        ReserveStockRequest req3 = ReserveStockRequest.builder()
+                .sku("SKU_RACE_2")
+                .quantity(1)
+                .customerId("333")
+                .orderId("ORDER_Z")
+                .build();
+
+        // When - All 3 try to reserve simultaneously
+        var results = Flux.merge(
+                inventoryService.reserveStock(req1).map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED"),
+                inventoryService.reserveStock(req2).map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED"),
+                inventoryService.reserveStock(req3).map(r -> "SUCCESS").onErrorReturn(InsufficientStockException.class, "FAILED")
+        ).collectList();
+
+        // Then - Exactly 2 succeed, 1 fails
+        StepVerifier.create(results)
+                .assertNext(list -> {
+                    long successCount = list.stream().filter(s -> s.equals("SUCCESS")).count();
+                    long failedCount = list.stream().filter(s -> s.equals("FAILED")).count();
+
+                    assertThat(successCount).isEqualTo(2); // 2 succeeded
+                    assertThat(failedCount).isEqualTo(1);  // 1 failed
+                })
+                .verifyComplete();
+
+        // Verify final state: reserved_stock should be exactly 2 (not 3)
+        StepVerifier.create(inventoryService.getInventoryBySku("SKU_RACE_2"))
+                .assertNext(item -> {
+                    assertThat(item.getCurrentStock()).isEqualTo(2);
+                    assertThat(item.getReservedStock()).isEqualTo(2); // CRITICAL: Must be 2, not 3
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("RACE CONDITION TEST: Should handle high concurrency - 10 customers, 5 items available")
+    void shouldPreventOversellingUnderHighConcurrency() {
+        // Given - Create item with 5 available
+        createTestInventoryItem("SKU_RACE_5", 997L, 1L, 5, 0); // current=5, reserved=0
+
+        // When - 10 customers try to reserve 1 each simultaneously
+        var requests = Flux.range(1, 10)
+                .flatMap(i -> {
+                    ReserveStockRequest req = ReserveStockRequest.builder()
+                            .sku("SKU_RACE_5")
+                            .quantity(1)
+                            .customerId(String.valueOf(i))
+                            .orderId("ORDER_" + i)
+                            .build();
+
+                    return inventoryService.reserveStock(req)
+                            .map(r -> "SUCCESS")
+                            .onErrorReturn(InsufficientStockException.class, "FAILED");
+                })
+                .collectList();
+
+        // Then - Exactly 5 succeed, 5 fail
+        StepVerifier.create(requests)
+                .assertNext(list -> {
+                    long successCount = list.stream().filter(s -> s.equals("SUCCESS")).count();
+                    long failedCount = list.stream().filter(s -> s.equals("FAILED")).count();
+
+                    assertThat(successCount).isEqualTo(5); // Exactly 5 succeeded
+                    assertThat(failedCount).isEqualTo(5);  // Exactly 5 failed
+                })
+                .verifyComplete();
+
+        // Verify final state
+        StepVerifier.create(inventoryService.getInventoryBySku("SKU_RACE_5"))
+                .assertNext(item -> {
+                    assertThat(item.getCurrentStock()).isEqualTo(5);
+                    assertThat(item.getReservedStock()).isEqualTo(5); // CRITICAL: Exactly 5, no overselling
                 })
                 .verifyComplete();
     }

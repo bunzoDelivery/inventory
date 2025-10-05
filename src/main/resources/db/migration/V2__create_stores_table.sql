@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS stores (
     INDEX idx_location (latitude, longitude)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert initial dark store for Lusaka
-INSERT INTO stores (id, name, address, latitude, longitude, serviceable_radius_km, is_active)
+-- Insert initial dark store for Lusaka (only if not exists)
+INSERT IGNORE INTO stores (id, name, address, latitude, longitude, serviceable_radius_km, is_active)
 VALUES (1, 'Lusaka Dark Store 1', 'Plot 5, Great East Road, Lusaka', -15.3875, 28.3228, 5, TRUE);
 
 -- Add foreign key constraint to inventory_items table
