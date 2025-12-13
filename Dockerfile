@@ -14,7 +14,8 @@ RUN mvn clean package -DskipTests
 # Runtime stage
 FROM amazoncorretto:17
 WORKDIR /app
-RUN yum install -y curl && yum clean all
+# Install curl for health checks (Amazon Linux uses yum) and shadow-utils for user management
+RUN yum install -y curl shadow-utils && yum clean all
 
 # Create non-root user
 RUN groupadd -r inventory && useradd -r -g inventory inventory
