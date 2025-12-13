@@ -17,6 +17,24 @@ CREATE TABLE IF NOT EXISTS stores (
 
 
 -- Add foreign key constraint to inventory_items table
-ALTER TABLE inventory_items
-ADD CONSTRAINT fk_inventory_store
-FOREIGN KEY (store_id) REFERENCES stores(id);
+-- Safely add foreign key constraint only if it doesn't exist
+DROP PROCEDURE IF EXISTS AddInventoryStoreFK;
+DELIMITER //
+CREATE PROCEDURE AddInventoryStoreFK()
+BEGIN
+    IF NOT EXISTS (
+        SELECT NULL
+        FROM information_schema.TABLE_CONSTRAINTS
+        WHERE CONSTRAINT_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'inventory_items'
+        AND CONSTRAINT_NAME = 'fk_inventory_store'
+    ) THEN
+        ALTER TABLE inventory_items
+        ADD CONSTRAINT fk_inventory_store
+        FOREIGN KEY (store_id) REFERENCES stores(id);
+    END IF;
+END //
+DELIMITER ;
+
+CALL AddInventoryStoreFK();
+DROP PROCEDURE AddInventoryStoreFK;
