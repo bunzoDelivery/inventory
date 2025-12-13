@@ -1,4 +1,4 @@
-
+services:
     # Inventory Service
     inventory-service:
         build: .
