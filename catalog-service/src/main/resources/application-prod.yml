@@ -12,7 +12,7 @@ spring:
     flyway:
         enabled: true
         url: jdbc:mysql://inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com:3306/inventory
-        username: admin
+        user: admin
         password: mysqlInv2025
         baseline-on-migrate: true
 

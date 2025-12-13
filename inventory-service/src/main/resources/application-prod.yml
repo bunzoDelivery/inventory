@@ -4,18 +4,17 @@ spring:
         url: r2dbc:mysql://inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com:3306/inventory
         username: admin
         password: mysqlInv2025
-    
-    flyway:
-        enabled: true
-        url: jdbc:mysql://inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com:3306/inventory
-        username: admin
-        password: mysqlInv2025
-        baseline-on-migrate: true
         pool:
             initial-size: 5
             max-size: 10
             max-idle-time: 30m
-
+    
+    flyway:
+        enabled: true
+        url: jdbc:mysql://inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com:3306/inventory
+        user: admin
+        password: mysqlInv2025
+        baseline-on-migrate: true
 
 
 logging:

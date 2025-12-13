@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  # Local MySQL Database for Development
+  mysql:
+    image: mysql:8.0
+    container_name: inventory-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: quickcommerce_dev
+      MYSQL_USER: inventory_user
+      MYSQL_PASSWORD: dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 20s
+      retries: 10
+
+volumes:
+  mysql_data_dev:

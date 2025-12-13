@@ -12,19 +12,8 @@ spring:
         password: mysqlInv2025
         baseline-on-migrate: true
 
-
 logging:
     level:
-        com.quickcommerce.inventory: DEBUG
+        com.quickcommerce.catalog: DEBUG
         org.springframework.r2dbc: DEBUG
-        org.springframework.web.reactive: DEBUG
         reactor.netty: DEBUG
-
-server:
-    port: 8081
-
-management:
-    endpoints:
-        web:
-            exposure:
-                include: "*"
