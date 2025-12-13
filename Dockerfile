@@ -17,10 +17,11 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Runtime stage
-FROM openjdk:17-jre-slim
+# Runtime stage
+FROM amazoncorretto:17
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks (Amazon Linux uses yum)
+RUN yum install -y curl && yum clean all
 
 # Create non-root user
 RUN groupadd -r inventory && useradd -r -g inventory inventory
