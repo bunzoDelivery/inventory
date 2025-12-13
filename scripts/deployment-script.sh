@@ -29,7 +29,8 @@ sudo chown ec2-user:ec2-user /app
 cd /app
 
 # 6. Clone Repository
-REPO_URL="https://github.com/PrajwalPrabhu101/inventory.git"
+# IMPORTANT: Replace the URL below with YOUR actual GitHub repository URL
+REPO_URL="https://github.com/bunzoDelivery/inventory.git"
 echo "Cloning repository from $REPO_URL..."
 
 if [ -d ".git" ]; then
