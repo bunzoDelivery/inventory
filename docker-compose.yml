@@ -1,7 +1,10 @@
 services:
     # Inventory Service
     inventory-service:
-        build: .
+        build:
+            context: .
+            args:
+                MODULE_NAME: inventory-service
         container_name: inventory-service
         environment:
             SPRING_PROFILES_ACTIVE: prod
@@ -22,7 +25,10 @@ services:
 
     # Catalog Service
     catalog-service:
-        build: .
+        build:
+            context: .
+            args:
+                MODULE_NAME: catalog-service
         container_name: catalog-service
         environment:
             SPRING_PROFILES_ACTIVE: prod

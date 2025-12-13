@@ -1,52 +1,40 @@
 # Multi-stage build for Spring Boot application
 FROM maven:3.9-amazoncorretto-17 AS build
-
-# Set working directory
 WORKDIR /app
 
-# Copy pom.xml first for better caching
+# Copy the entire project context (parent pom and all modules)
 COPY pom.xml .
+COPY common ./common
+COPY inventory-service ./inventory-service
+COPY catalog-service ./catalog-service
 
-# Download dependencies
-RUN mvn dependency:go-offline -B
-
-# Copy source code
-COPY src ./src
-
-# Build the application
+# Build all modules
 RUN mvn clean package -DskipTests
 
 # Runtime stage
-# Runtime stage
 FROM amazoncorretto:17
-
-# Install curl for health checks (Amazon Linux uses yum)
+WORKDIR /app
 RUN yum install -y curl && yum clean all
 
 # Create non-root user
 RUN groupadd -r inventory && useradd -r -g inventory inventory
 
-# Set working directory
-WORKDIR /app
+# Define which module to package in this image
+ARG MODULE_NAME
+# Fail if MODULE_NAME is not set
+RUN if [ -z "$MODULE_NAME" ]; then echo "MODULE_NAME is required" && exit 1; fi
 
-# Copy the jar file from build stage
-COPY --from=build /app/target/inventory-service-*.jar app.jar
+# Copy the specific module's jar
+COPY --from=build /app/${MODULE_NAME}/target/*.jar app.jar
 
-# Change ownership to non-root user
+# Change ownership and switch user
 RUN chown inventory:inventory app.jar
-
-# Switch to non-root user
 USER inventory
 
-# Expose port
-EXPOSE 8081
+EXPOSE 8081 8082
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8081/actuator/health || exit 1
+  CMD curl -f http://localhost:8081/actuator/health || curl -f http://localhost:8082/actuator/health || exit 1
 
-# JVM options for production
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+OptimizeStringConcat"
-
-# Run the application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
