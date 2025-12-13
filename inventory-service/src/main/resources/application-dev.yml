@@ -5,15 +5,14 @@ spring:
         username: inventory_user
         password: dev_password
 
-    redis:
-        host: localhost
-        port: 6379
+    flyway:
+        enabled: true
+        url: jdbc:mysql://localhost:3306/quickcommerce_dev
+        user: inventory_user
+        password: dev_password
+        locations: classpath:db/migration
 
-    rabbitmq:
-        host: localhost
-        port: 5672
-        username: guest
-        password: guest
+
 
 logging:
     level:

@@ -1,99 +1,47 @@
 version: "3.8"
 
 services:
-    # MySQL Database
-    mysql:
-        image: mysql:8.0
-        container_name: inventory-mysql
-        environment:
-            MYSQL_ROOT_PASSWORD: rootpassword
-            MYSQL_DATABASE: quickcommerce
-            MYSQL_USER: inventory_user
-            MYSQL_PASSWORD: secure_password
-        ports:
-            - "3306:3306"
-        volumes:
-            - mysql_data:/var/lib/mysql
-            - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-        networks:
-            - inventory-network
-        healthcheck:
-            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-            timeout: 20s
-            retries: 10
-
-    # Redis Cache
-    redis:
-        image: redis:7-alpine
-        container_name: inventory-redis
-        ports:
-            - "6379:6379"
-        volumes:
-            - redis_data:/data
-        networks:
-            - inventory-network
-        healthcheck:
-            test: ["CMD", "redis-cli", "ping"]
-            timeout: 3s
-            retries: 5
-
-    # RabbitMQ Message Broker
-    rabbitmq:
-        image: rabbitmq:3-management-alpine
-        container_name: inventory-rabbitmq
-        environment:
-            RABBITMQ_DEFAULT_USER: guest
-            RABBITMQ_DEFAULT_PASS: guest
-        ports:
-            - "5672:5672"
-            - "15672:15672"
-        volumes:
-            - rabbitmq_data:/var/lib/rabbitmq
-        networks:
-            - inventory-network
-        healthcheck:
-            test: ["CMD", "rabbitmq-diagnostics", "ping"]
-            timeout: 10s
-            retries: 5
-
     # Inventory Service
     inventory-service:
         build: .
         container_name: inventory-service
         environment:
-            SPRING_PROFILES_ACTIVE: dev
-            DB_HOST: mysql
+            SPRING_PROFILES_ACTIVE: prod
+            DB_HOST: ${DB_HOST}
             DB_PORT: 3306
             DB_NAME: quickcommerce
-            DB_USERNAME: inventory_user
-            DB_PASSWORD: secure_password
-            REDIS_HOST: redis
-            REDIS_PORT: 6379
-            RABBITMQ_HOST: rabbitmq
-            RABBITMQ_PORT: 5672
-            RABBITMQ_USERNAME: guest
-            RABBITMQ_PASSWORD: guest
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
         ports:
             - "8081:8081"
-        depends_on:
-            mysql:
-                condition: service_healthy
-            redis:
-                condition: service_healthy
-            rabbitmq:
-                condition: service_healthy
         networks:
             - inventory-network
         healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+            test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
             timeout: 10s
             retries: 5
             start_period: 60s
 
-volumes:
-    mysql_data:
-    redis_data:
-    rabbitmq_data:
+    # Catalog Service
+    catalog-service:
+        build: .
+        container_name: catalog-service
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            DB_HOST: ${DB_HOST}
+            DB_PORT: 3306
+            DB_NAME: quickcommerce
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
+        ports:
+            - "8082:8082"
+        networks:
+            - inventory-network
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health" ]
+            timeout: 10s
+            retries: 5
+            start_period: 60s
 
 networks:
     inventory-network:

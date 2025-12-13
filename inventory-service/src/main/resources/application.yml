@@ -1,117 +1,14 @@
 spring:
-    application:
-        name: inventory-service
+  application:
+    name: inventory-service
+  profiles:
+    active: dev
 
-    # R2DBC Database Configuration (for reactive operations)
-    r2dbc:
-        url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}
-        username: ${DB_USERNAME:inventory_user}
-        password: ${DB_PASSWORD:secure_password}
-        pool:
-            initial-size: 10
-            max-size: 20
-            max-idle-time: 30m
-            max-create-connection-time: 60s
-            max-acquire-time: 60s
-            max-life-time: 30m
-
-    # Flyway Database Migration (uses JDBC, not R2DBC)
-    flyway:
-        enabled: ${FLYWAY_ENABLED:true}
-        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}?allowPublicKeyRetrieval=true&useSSL=false
-        user: ${DB_USERNAME:inventory_user}
-        password: ${DB_PASSWORD:secure_password}
-        locations: classpath:db/migration
-        baseline-on-migrate: true
-        baseline-version: 0
-        validate-on-migrate: true
-
-    # RabbitMQ Configuration
-    rabbitmq:
-        host: ${RABBITMQ_HOST:localhost}
-        port: ${RABBITMQ_PORT:5672}
-        username: ${RABBITMQ_USERNAME:guest}
-        password: ${RABBITMQ_PASSWORD:guest}
-        virtual-host: /
-        connection-timeout: 15000ms
-        publisher-confirm-type: correlated
-        publisher-returns: true
-        listener:
-            simple:
-                acknowledge-mode: auto
-                retry:
-                    enabled: true
-                    initial-interval: 1000ms
-                    max-attempts: 3
-
-    # Security Configuration
-    security:
-        oauth2:
-            resourceserver:
-                jwt:
-                    issuer-uri: ${JWT_ISSUER_URI:http://auth-service:8080}
-
-# Management and Monitoring
-management:
-    endpoints:
-        web:
-            exposure:
-                include: health,info,metrics,prometheus,loggers
-    endpoint:
-        health:
-            show-details: always
-            probes:
-                enabled: true
-                health:
-                    db:
-                        enabled: true
-        rabbit:
-            enabled: true
-    metrics:
-        export:
-            prometheus:
-                enabled: true
-        distribution:
-            percentiles-histogram:
-                http.server.requests: true
-    tracing:
-        sampling:
-            probability: 1.0
-    zipkin:
-        tracing:
-            endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
-
-# Logging Configuration
-logging:
-    level:
-        com.quickcommerce.inventory: ${LOG_LEVEL:INFO}
-        org.springframework.r2dbc: ${SPRING_R2DBC_LOG_LEVEL:WARN}
-        org.springframework.security: ${SPRING_SECURITY_LOG_LEVEL:WARN}
-        reactor.netty: ${REACTOR_NETTY_LOG_LEVEL:WARN}
-    pattern:
-        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
-        file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
-    file:
-        name: logs/inventory-service.log
-
-# Server Configuration
 server:
-    port: ${SERVER_PORT:8081}
-    netty:
-        connection-timeout: 30s
-        idle-timeout: 60s
-        max-connections: 1000
-        max-connections-per-host: 100
+  port: 8081
 
-# Application Specific Configuration
-app:
-    inventory:
-        cache:
-            ttl: 5m
-            max-size: 1000
-        reservation:
-            ttl: 15m
-            cleanup-interval: 1m
-        alerts:
-            low-stock-threshold: 10
-            replenishment-threshold: 1.5
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

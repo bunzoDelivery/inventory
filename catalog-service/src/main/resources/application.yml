@@ -1,46 +1,14 @@
 spring:
   application:
     name: catalog-service
+  profiles:
+    active: dev
 
-  # R2DBC Configuration (Reactive Database)
-  r2dbc:
-    url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}
-    username: ${DB_USERNAME:catalog_user}
-    password: ${DB_PASSWORD:secure_password}
-    pool:
-      enabled: true
-      initial-size: 10
-      max-size: 20
-      max-idle-time: 30m
-      max-acquire-time: 30s
-      max-create-connection-time: 30s
-
-  # Flyway Database Migration (uses JDBC, not R2DBC)
-  flyway:
-    enabled: ${FLYWAY_ENABLED:true}
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:quickcommerce}
-    user: ${DB_USERNAME:catalog_user}
-    password: ${DB_PASSWORD:secure_password}
-    locations: classpath:db/migration
-    baseline-on-migrate: true
-
-# Server Configuration
 server:
-  port: ${SERVER_PORT:8081}
+  port: 8082
 
-# Logging Configuration
-logging:
-  level:
-    root: INFO
-    com.quickcommerce.catalog: DEBUG
-    org.springframework.data.r2dbc: DEBUG
-
-# Management endpoints
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
