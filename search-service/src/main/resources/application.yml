@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: search-service
+
+server:
+  port: 8083
+
+# Meilisearch Configuration
+meilisearch:
+  host: ${MEILI_HOST:http://localhost:7700}
+  apiKey: ${MEILI_MASTER_KEY:masterKey}
+  indexName: ${MEILI_INDEX_NAME:products}
+  timeout: 500ms
+
+# Client Configuration for other services
+clients:
+  inventory:
+    url: ${INVENTORY_SERVICE_URL:http://localhost:8081}
+    timeout: 200ms
+  catalog:
+    url: ${CATALOG_SERVICE_URL:http://localhost:8082}
+    timeout: 300ms
+
+# Search Configuration
+search:
+  candidateLimit: 80
+  defaultResultLimit: 20
+  maxResultLimit: 100
+
+# Management and Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.quickcommerce.search: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

@@ -1,0 +1,23 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# Production configuration
+meilisearch:
+  host: ${MEILI_HOST}
+  apiKey: ${MEILI_MASTER_KEY}
+
+clients:
+  inventory:
+    url: ${INVENTORY_SERVICE_URL}
+    useStub: false
+  catalog:
+    url: ${CATALOG_SERVICE_URL}
+    useStub: false
+
+# Production logging
+logging:
+  level:
+    com.quickcommerce.search: INFO
+    com.meilisearch: WARN

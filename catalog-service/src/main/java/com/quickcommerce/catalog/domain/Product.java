@@ -68,7 +68,8 @@ public class Product {
 
     /**
      * JSON array of image URLs
-     * Example: ["https://cdn.example.com/product1.jpg", "https://cdn.example.com/product2.jpg"]
+     * Example: ["https://cdn.example.com/product1.jpg",
+     * "https://cdn.example.com/product2.jpg"]
      */
     private String images;
 
@@ -108,6 +109,42 @@ public class Product {
      * Barcode/UPC/EAN for scanning
      */
     private String barcode;
+
+    /**
+     * Additional search keywords for enhanced discoverability
+     * Hindi terms, synonyms, common misspellings (comma-separated)
+     * Example: "doodh,milk,dudh,taaza,tazza"
+     */
+    private String searchKeywords;
+
+    /**
+     * Global search ranking priority (0-100, higher = better)
+     * Manual override for boosting specific products in search results
+     */
+    private Integer searchPriority;
+
+    /**
+     * Bestseller flag for ranking boost
+     * Manually set by marketing/admin team
+     */
+    private Boolean isBestseller;
+
+    /**
+     * Product view count (passive popularity signal)
+     * Incremented when product is viewed
+     */
+    private Integer viewCount;
+
+    /**
+     * Times this product was ordered (strong popularity signal)
+     * Incremented on successful orders
+     */
+    private Integer orderCount;
+
+    /**
+     * Last order timestamp (for trending/recency factor)
+     */
+    private LocalDateTime lastOrderedAt;
 
     private LocalDateTime createdAt;
 
