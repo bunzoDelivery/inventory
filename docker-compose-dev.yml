@@ -19,6 +19,34 @@ services:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       timeout: 20s
       retries: 10
+    networks:
+      - inventory-network
+
+  # Meilisearch - Search Engine
+  meilisearch:
+    image: getmeili/meilisearch:v1.9
+    container_name: meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: masterKey
+      MEILI_ENV: development
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:7700/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - inventory-network
 
 volumes:
   mysql_data_dev:
+  meilisearch_data:
+
+
+networks:
+  inventory-network:
+    driver: bridge

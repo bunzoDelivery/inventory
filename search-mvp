@@ -1,0 +1,191 @@
+## 1️⃣ Must-Have Capabilities (Day-1)
+
+These are **non-negotiable**.
+
+---
+
+### ✅ 1. Exact Product Search
+
+**Supports queries like**
+
+- “amul taaza milk”
+- “surf excel”
+- “dettol liquid”
+
+**Business expectation**
+
+- Exact product appears at the top
+- Correct variants next
+- Substitutes only if exact is unavailable
+
+📌 If this fails, users churn immediately.
+
+---
+
+### ✅ 2. Brand Search
+
+**Supports queries like**
+
+- “amul”
+- “nestle”
+- “himalaya”
+
+**Business expectation**
+
+- Show top-selling SKUs of that brand
+- Mix categories
+- Avoid obscure variants early
+
+📌 This increases basket size naturally.
+
+---
+
+### ✅ 3. Category Search
+
+**Supports queries like**
+
+- “chips”
+- “biscuits”
+- “soap”
+- “vegetables”
+
+**Business expectation**
+
+- Popular items first
+- Limited, curated results
+- No overwhelming lists
+
+📌 Category search = controlled discovery.
+
+---
+
+### ✅ 4. In-Stock Only Results (Critical)
+
+**Business rule**
+
+- Never show unavailable products
+- Never let users discover stock issues after clicking
+
+📌 Availability > relevance > price.
+
+---
+
+### ✅ 5. Store / Location Awareness
+
+**Business rule**
+
+- Results must reflect the user’s assigned dark store
+- Search is local, not global
+
+📌 Same query may return different results by location.
+Note : even though we are starting with 1 dark store we need to build the system in a way that we can incorporate multiple dark stores without having to do too much design changes in future.
+
+---
+
+### ✅ 6. Misspellings & Synonyms
+
+**Supports**
+
+- Typos (`amul tazza`)
+- Variants (`aata` vs `atta`)
+- Brand-as-category (`surf`, `colgate`)
+
+📌 Search must speak **user language**.
+
+---
+
+### ✅ 7. Zero “No Results” Pages
+
+**Business expectation**
+
+- Always return something useful
+- Show substitutes or category fallback
+
+📌 Empty search = lost order.
+
+---
+
+## 2️⃣ Must-Have Ranking Logic (Very Simple)
+
+Search MVP ranking should be **rule-based**, not smart.
+
+Priority order:
+
+1. In-stock
+2. Popular / fast-moving
+3. Common pack sizes
+4. Trusted brands
+5. Price (only as a tie-breaker)
+
+📌 No AI. No personalization.
+
+---
+
+## 3️⃣ UX Expectations for Search MVP
+
+Search results must:
+
+- Load fast
+- Be stable
+- Be predictable
+
+Each result should clearly show:
+
+- Product image
+- Name
+- Size
+- Price
+- Add button
+
+📌 User should add without opening PDP.
+
+---
+
+## 4️⃣ MVP Metrics (Day-1 Tracking)
+
+Search MVP must track:
+
+- Search → Add-to-Cart %
+- Zero-result search rate
+- Time to first add-to-cart
+- Search usage per session
+
+📌 If these are healthy, MVP is working.
+
+---
+
+## 5️⃣ Explicitly NOT in Search MVP
+
+This is **critical for scope control**.
+
+❌ Personalization
+
+❌ AI intent detection
+
+❌ Advanced filters
+
+❌ Voice search
+
+❌ Recommendations inside search
+
+❌ Sponsored search results
+
+❌ Margin-based ranking
+
+> These are Phase-2 / Phase-3 features.
+> 
+
+---
+
+## 6️⃣ Search MVP Success Definition
+
+Search MVP is successful if:
+
+- Users consistently find essentials in seconds
+- Add-to-cart happens quickly
+- Zero-result searches are rare
+- Users trust search results
+
+> Boring but reliable = success
+> 
+

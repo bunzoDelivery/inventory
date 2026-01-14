@@ -1,0 +1,277 @@
+[
+    {
+        "id": 1,
+        "name": "Amul Taaza Milk",
+        "brand": "Amul",
+        "description": "Fresh toned milk",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "keywords": [
+            "milk",
+            "doodh",
+            "dudh",
+            "taaza",
+            "tazza",
+            "amul milk"
+        ],
+        "barcode": "8901430001632",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 58.00,
+        "unitOfMeasure": "L",
+        "unitText": "1L",
+        "imageUrl": "https://via.placeholder.com/150?text=Amul+Milk",
+        "productUrl": "/p/amul-taaza-milk-1l",
+        "priority": 90,
+        "isBestseller": true,
+        "orderCount": 450
+    },
+    {
+        "id": 2,
+        "name": "Amul Butter",
+        "brand": "Amul",
+        "description": "Utterly butterly delicious",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "keywords": [
+            "butter",
+            "makhan",
+            "amul butter"
+        ],
+        "barcode": "8901430001649",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 55.00,
+        "unitOfMeasure": "g",
+        "unitText": "100g",
+        "imageUrl": "https://via.placeholder.com/150?text=Amul+Butter",
+        "productUrl": "/p/amul-butter-100g",
+        "priority": 85,
+        "isBestseller": true,
+        "orderCount": 380
+    },
+    {
+        "id": 3,
+        "name": "Britannia Good Day Cookies",
+        "brand": "Britannia",
+        "description": "Butter cookies",
+        "categoryId": 2,
+        "categoryName": "Snacks",
+        "keywords": [
+            "cookies",
+            "biscuit",
+            "biskut",
+            "good day"
+        ],
+        "barcode": "8901063001046",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 30.00,
+        "unitOfMeasure": "g",
+        "unitText": "150g",
+        "imageUrl": "https://via.placeholder.com/150?text=Good+Day",
+        "productUrl": "/p/britannia-good-day-150g",
+        "priority": 75,
+        "isBestseller": false,
+        "orderCount": 320
+    },
+    {
+        "id": 4,
+        "name": "Lay's Classic Salted Chips",
+        "brand": "Lay's",
+        "description": "Crispy potato chips",
+        "categoryId": 2,
+        "categoryName": "Snacks",
+        "keywords": [
+            "chips",
+            "wafers",
+            "lays",
+            "potato",
+            "namkeen"
+        ],
+        "barcode": "8901262210063",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 20.00,
+        "unitOfMeasure": "g",
+        "unitText": "52g",
+        "imageUrl": "https://via.placeholder.com/150?text=Lays+Chips",
+        "productUrl": "/p/lays-classic-52g",
+        "priority": 80,
+        "isBestseller": true,
+        "orderCount": 510
+    },
+    {
+        "id": 5,
+        "name": "Surf Excel Matic Liquid",
+        "brand": "Surf Excel",
+        "description": "Washing machine liquid detergent",
+        "categoryId": 3,
+        "categoryName": "Household",
+        "keywords": [
+            "detergent",
+            "washing liquid",
+            "surf",
+            "surf excel",
+            "kapde dhone ka"
+        ],
+        "barcode": "8901030862069",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 225.00,
+        "unitOfMeasure": "ml",
+        "unitText": "1L",
+        "imageUrl": "https://via.placeholder.com/150?text=Surf+Excel",
+        "productUrl": "/p/surf-excel-matic-1l",
+        "priority": 70,
+        "isBestseller": false,
+        "orderCount": 180
+    },
+    {
+        "id": 6,
+        "name": "Dettol Liquid Handwash",
+        "brand": "Dettol",
+        "description": "Germ protection handwash",
+        "categoryId": 3,
+        "categoryName": "Household",
+        "keywords": [
+            "handwash",
+            "soap",
+            "dettol",
+            "sabun",
+            "liquid soap"
+        ],
+        "barcode": "8901396303039",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 85.00,
+        "unitOfMeasure": "ml",
+        "unitText": "200ml",
+        "imageUrl": "https://via.placeholder.com/150?text=Dettol",
+        "productUrl": "/p/dettol-handwash-200ml",
+        "priority": 65,
+        "isBestseller": false,
+        "orderCount": 275
+    },
+    {
+        "id": 7,
+        "name": "Onion",
+        "brand": "Fresh",
+        "description": "Fresh red onion",
+        "categoryId": 4,
+        "categoryName": "Vegetables",
+        "keywords": [
+            "onion",
+            "pyaz",
+            "kanda",
+            "vegetables",
+            "sabzi"
+        ],
+        "barcode": null,
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 40.00,
+        "unitOfMeasure": "kg",
+        "unitText": "1kg",
+        "imageUrl": "https://via.placeholder.com/150?text=Onion",
+        "productUrl": "/p/onion-1kg",
+        "priority": 95,
+        "isBestseller": true,
+        "orderCount": 620
+    },
+    {
+        "id": 8,
+        "name": "Tomato",
+        "brand": "Fresh",
+        "description": "Fresh tomatoes",
+        "categoryId": 4,
+        "categoryName": "Vegetables",
+        "keywords": [
+            "tomato",
+            "tamatar",
+            "vegetables",
+            "sabzi"
+        ],
+        "barcode": null,
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 35.00,
+        "unitOfMeasure": "kg",
+        "unitText": "1kg",
+        "imageUrl": "https://via.placeholder.com/150?text=Tomato",
+        "productUrl": "/p/tomato-1kg",
+        "priority": 92,
+        "isBestseller": true,
+        "orderCount": 580
+    },
+    {
+        "id": 9,
+        "name": "Kurkure Masala Munch",
+        "brand": "Kurkure",
+        "description": "Crunchy masala snack",
+        "categoryId": 2,
+        "categoryName": "Snacks",
+        "keywords": [
+            "kurkure",
+            "masala",
+            "namkeen",
+            "snacks"
+        ],
+        "barcode": "8901262120063",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 20.00,
+        "unitOfMeasure": "g",
+        "unitText": "90g",
+        "imageUrl": "https://via.placeholder.com/150?text=Kurkure",
+        "productUrl": "/p/kurkure-masala-90g",
+        "priority": 78,
+        "isBestseller": false,
+        "orderCount": 395
+    },
+    {
+        "id": 10,
+        "name": "Nestlé Dahi",
+        "brand": "Nestlé",
+        "description": "Fresh curd",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "keywords": [
+            "curd",
+            "dahi",
+            "yogurt",
+            "nestle"
+        ],
+        "barcode": "8901058881479",
+        "storeIds": [
+            1
+        ],
+        "isActive": true,
+        "price": 40.00,
+        "unitOfMeasure": "g",
+        "unitText": "400g",
+        "imageUrl": "https://via.placeholder.com/150?text=Nestle+Dahi",
+        "productUrl": "/p/nestle-dahi-400g",
+        "priority": 70,
+        "isBestseller": false,
+        "orderCount": 290
+    }
+]

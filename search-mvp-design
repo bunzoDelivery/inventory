@@ -1,0 +1,271 @@
+0) Goal
+
+Implement Search MVP for quick commerce:
+
+user types query in app → calls Search API → results returned
+
+results are store-aware and in-stock only
+
+Meilisearch provides candidate matches (catalog only)
+
+Inventory service provides stock truth
+
+Search API orchestrates and applies MVP ranking + fallback
+
+1) Components & Responsibilities
+
+Frontend/App
+
+Sends: query, storeId, limit
+
+Renders results, no business logic
+
+Search API (Orchestrator)
+
+Normalizes query
+
+Calls Meili to get candidate products (limit ~80)
+
+Calls Inventory to filter in-stock
+
+Applies ranking rules + fallback
+
+Returns final results (limit ~20)
+
+Meilisearch (Search Index)
+
+Stores product documents (catalog + assortment only)
+
+Handles typo tolerance, synonyms, matching
+
+Does NOT know stock
+
+Inventory Service
+
+Input: storeId + productIds
+
+Output: inStock map
+
+Source of truth
+
+Mental model: Search engine suggests → Inventory decides → Backend orchestrates → Frontend renders
+
+2) Search Flow (Sequence)
+
+Client calls POST /search with query, storeId, limit=20
+
+Search API calls Meili:
+
+q=query, limit=80, filter: isActive=true AND storeIds="STORE_123"
+
+retrieve minimal fields
+
+Search API extracts productIds from hits
+
+Search API calls Inventory availability:
+
+storeId + productIds[]
+
+Filter out OOS items
+
+Apply ranking rules (MVP):
+
+In-stock (hard filter)
+
+Popularity (if available)
+
+Common pack sizes / bestsellers / priority
+
+Brand trust
+
+Price (tie-breaker only)
+
+Fallback if empty:
+
+category fallback or popular in-stock items for store
+
+never return “no results”
+
+Return final results to client
+
+3) API Contracts
+3.1 Search API
+
+POST /search
+
+Request:
+
+{
+  "query": "milk",
+  "storeId": "STORE_123",
+  "limit": 20
+}
+
+
+Response:
+
+{
+  "query": "milk",
+  "storeId": "STORE_123",
+  "results": [
+    {
+      "productId": "P3",
+      "name": "Amul Taaza Milk",
+      "brand": "Amul",
+      "category": "Dairy",
+      "unitText": "1L",
+      "price": 58,
+      "imageUrl": "https://...",
+      "productUrl": "/p/P3",
+      "inStock": true
+    }
+  ],
+  "meta": {
+    "processingTimeMs": 23,
+    "candidates": 80,
+    "returned": 20
+  }
+}
+
+3.2 Inventory availability (can be stubbed locally)
+
+POST /inventory/availability
+
+Request:
+
+{
+  "storeId": "STORE_123",
+  "productIds": ["P1","P2","P3"]
+}
+
+
+Response:
+
+{
+  "storeId": "STORE_123",
+  "availability": {
+    "P1": true,
+    "P2": false,
+    "P3": true
+  }
+}
+
+4) Meilisearch Index: products
+4.1 Document schema (Option A: store assortment filtering)
+
+Required fields:
+
+{
+  "id": "P3",
+  "name": "Amul Taaza Milk",
+  "brand": "Amul",
+  "category": "Dairy",
+  "keywords": ["milk","doodh","taaza","amul milk","1 litre"],
+  "storeIds": ["STORE_123","STORE_456"],
+  "isActive": true,
+  "unitText": "1L",
+  "packSize": 1,
+  "uom": "L",
+  "price": 58,
+  "imageUrl": "https://...",
+  "productUrl": "/p/P3",
+  "priority": 0,
+  "isBestseller": true
+}
+
+4.2 Index settings JSON
+{
+  "searchableAttributes": ["name","brand","category","keywords","sku","barcodes"],
+  "filterableAttributes": ["storeIds","isActive","brand","category","isBestseller"],
+  "sortableAttributes": ["price","priority"],
+  "rankingRules": ["words","typo","proximity","attribute","sort","exactness"],
+  "stopWords": [],
+  "synonyms": {
+    "atta": ["aata","aataa"],
+    "aata": ["atta","aataa"],
+    "doodh": ["milk"],
+    "milk": ["doodh"],
+    "coldrink": ["soft drink","soda"],
+    "soft drink": ["coldrink","soda"]
+  }
+}
+
+4.3 Meili query used by Search API
+{
+  "q": "milk",
+  "limit": 80,
+  "filter": "isActive = true AND storeIds = \"STORE_123\"",
+  "attributesToRetrieve": ["id","name","brand","category","unitText","price","imageUrl","productUrl","priority","isBestseller"]
+}
+
+5) Indexing / Update policy
+
+Write to Meili on:
+
+product create/update (name/brand/category/keywords)
+
+price change
+
+image change
+
+isActive changes
+
+storeIds assortment changes
+
+Do NOT write to Meili on:
+
+inventory stock changes (handled by inventory service at query time)
+
+6) Local dev setup
+
+Run Meili locally via Docker:
+
+docker run -it --rm -p 7700:7700 \
+  -e MEILI_MASTER_KEY=masterKey \
+  -v "$(pwd)/meili_data:/meili_data" \
+  getmeili/meilisearch:v1.9
+
+
+Configure app:
+
+MEILI_HOST=http://localhost:7700
+
+MEILI_KEY=masterKey
+
+MEILI_INDEX=products
+
+Provide a seed script or admin endpoint to:
+
+create index
+
+apply settings
+
+add sample docs
+
+7) Acceptance Criteria (Done = true)
+
+/search returns results for query for a given storeId
+
+Out-of-stock items never appear in final results
+
+Store filter works (storeIds)
+
+Typos + synonyms work for basic cases
+
+“No results” returns fallback (never empty)
+
+Local dev instructions succeed end-to-end
+
+8) Deliverables the agent should implement
+
+Meili client wrapper (SearchProvider)
+
+IndexWriter job (seed + upsert)
+
+Search API endpoint /search
+
+Inventory availability client (or stub for local)
+
+Config + docker-compose optional
+
+Unit/integration tests for search flow

@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+# Override for local development
+meilisearch:
+  host: http://localhost:7700
+  apiKey: masterKey
+
+clients:
+  inventory:
+    url: http://localhost:8081
+    # Use stub client for local dev
+    useStub: true
+  catalog:
+    url: http://localhost:8082
+    useStub: true
+
+# Detailed logging for development
+logging:
+  level:
+    com.quickcommerce.search: DEBUG
+    com.meilisearch: DEBUG
