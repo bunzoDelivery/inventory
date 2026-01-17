@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuples;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,67 +38,67 @@ public class SearchService {
 
     /**
      * Execute product search
-     *
-     * Flow:
-     * 1. Normalize query
-     * 2. Search Meilisearch (get candidates)
-     * 3. Filter by stock
-     * 4. Rank results
-     * 5. Apply fallback if empty
-     * 6. Build response
-     *
-     * @param request Search request
-     * @return Mono of Search response with results
      */
     public Mono<SearchResponse> search(SearchRequest request) {
-        long startTime = System.currentTimeMillis();
+        return Mono.defer(() -> { // Defer for fresh context
+            String normalizedQuery = normalizeQuery(request.getQuery());
 
-        log.info("Executing search: query='{}', storeId={}, limit={}",
-                request.getQuery(), request.getStoreId(), request.getLimit());
+            log.info("Executing search: query='{}', storeId={}, limit={}",
+                    request.getQuery(), request.getStoreId(), request.getLimit());
 
-        // 1. Normalize query
-        String normalizedQuery = normalizeQuery(request.getQuery());
+            return meilisearchProvider.search(
+                    normalizedQuery,
+                    request.getStoreId(),
+                    searchProperties.getCandidateLimit())
+                    .map(this::parseDocuments)
+                    .onErrorResume(e -> {
+                        log.error("CRITICAL DATA ERROR: Parsing failed", e);
+                        return Mono.just(new ArrayList<>());
+                    })
+                    // 1. Capture Candidate Count using Tuple
+                    .map(candidates -> Tuples.of(candidates, candidates.size()))
+                    .doOnNext(tuple -> log.debug("Got {} candidates from Meilisearch", tuple.getT2()))
+                    .flatMap(tuple -> {
+                        List<ProductDocument> candidates = tuple.getT1();
+                        int candidateCount = tuple.getT2();
 
-        // 2. Search Meilisearch for candidates
-        return meilisearchProvider.search(
-                normalizedQuery,
-                request.getStoreId(),
-                searchProperties.getCandidateLimit())
-                .map(this::parseDocuments)
-                .doOnNext(candidates -> log.debug("Got {} candidates from Meilisearch", candidates.size()))
-                .flatMap(candidates ->
-                // 3. Filter by stock availability
-                filterByStock(candidates, request.getStoreId()))
-                .doOnNext(inStockProducts -> log.debug("After stock filter: {} products", inStockProducts.size()))
-                .map(inStockProducts ->
-                // 4. Rank results
-                rankingService.rank(inStockProducts))
-                .flatMap(rankedProducts -> {
-                    // 5. Apply fallback if no results
-                    if (rankedProducts.isEmpty()) {
-                        log.warn("No results found, applying fallback");
-                        return fallbackService.getFallbackResults(normalizedQuery, request.getStoreId());
-                    }
-                    return Mono.just(rankedProducts);
-                })
-                .map(finalResults -> {
-                    // 6. Limit results and build response
-                    List<ProductDocument> limitedResults = finalResults.stream()
+                        return filterByStock(candidates, request.getStoreId())
+                                .doOnNext(inStockProducts -> log.debug("After stock filter: {} products",
+                                        inStockProducts.size()))
+                                .map(rankingService::rank)
+                                .flatMap(ranked -> {
+                                    if (ranked.isEmpty()) {
+                                        log.warn("No results found, applying fallback");
+                                        return fallbackService.getFallbackResults(normalizedQuery,
+                                                request.getStoreId());
+                                    }
+                                    return Mono.just(ranked);
+                                })
+                                // 2. Pass Count down to final step
+                                .map(finalResults -> Tuples.of(finalResults, candidateCount));
+                    });
+        })
+                .elapsed() // 3. Reactive Timing
+                .map(tupleTime -> {
+                    long timeMs = tupleTime.getT1();
+                    var dataTuple = tupleTime.getT2();
+                    List<ProductDocument> results = dataTuple.getT1();
+                    int candidateCount = dataTuple.getT2(); // Now we have the real count!
+
+                    List<ProductDocument> limitedResults = results.stream()
                             .limit(request.getLimit())
                             .collect(Collectors.toList());
 
-                    long processingTime = System.currentTimeMillis() - startTime;
-                    int candidatesSize = 0; // rough estimate or need to pass through tuple, simplifying for now
-
-                    log.info("Search completed in {}ms, returned {} results", processingTime, limitedResults.size());
+                    log.info("Search completed in {}ms, candidates: {}, returned: {}",
+                            timeMs, candidateCount, limitedResults.size());
 
                     return SearchResponse.builder()
                             .query(request.getQuery())
                             .storeId(request.getStoreId())
                             .results(convertToProductResults(limitedResults))
                             .meta(SearchResponse.SearchMeta.builder()
-                                    .processingTimeMs(processingTime)
-                                    .candidates(candidatesSize) // Logic simplification
+                                    .processingTimeMs(timeMs)
+                                    .candidates(candidateCount)
                                     .returned(limitedResults.size())
                                     .build())
                             .build();
@@ -105,12 +106,11 @@ public class SearchService {
     }
 
     /**
-     * Normalize search query
+     * Normalizes query string
      */
     private String normalizeQuery(String query) {
-        if (query == null) {
+        if (query == null)
             return "";
-        }
         return query.trim().toLowerCase();
     }
 
@@ -119,45 +119,52 @@ public class SearchService {
      */
     @SuppressWarnings("unchecked")
     private List<ProductDocument> parseDocuments(SearchResult result) {
-        try {
-            List<?> hits = result.getHits();
-            return hits.stream()
-                    .map(hit -> objectMapper.convertValue(hit, ProductDocument.class))
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("Error parsing Meilisearch hits", e);
-            return new ArrayList<>();
-        }
+        List<?> hits = result.getHits();
+        return hits.stream()
+                .map(hit -> objectMapper.convertValue(hit, ProductDocument.class))
+                .collect(Collectors.toList());
     }
 
     /**
      * Filter products by stock availability using InventoryClient
+     * Implements "Smart Fallback" to Meilisearch index data if Inventory Service
+     * fails
      */
     private Mono<List<ProductDocument>> filterByStock(List<ProductDocument> products, Long storeId) {
         if (products.isEmpty()) {
             return Mono.just(products);
         }
 
-        // Extract product IDs
         List<Long> productIds = products.stream()
                 .map(ProductDocument::getId)
                 .collect(Collectors.toList());
 
-        // Call inventory service to check availability (Reactive)
         return inventoryClient.checkAvailability(storeId, productIds)
-                .map(availabilityResponse -> {
-                    Map<Long, Boolean> availabilityMap = availabilityResponse.getAvailability();
+                .map(response -> {
+                    Map<Long, Boolean> liveStock = response.getAvailability();
 
-                    // Filter products: keep only in-stock items
-                    List<ProductDocument> inStockProducts = products.stream()
-                            .filter(product -> {
-                                Boolean inStock = availabilityMap.getOrDefault(product.getId(), false);
-                                return inStock != null && inStock;
-                            })
+                    // -------------------------------------------------------
+                    // SMART FALLBACK LOGIC
+                    // -------------------------------------------------------
+                    if (liveStock == null) {
+                        log.warn("Inventory Service failed. Falling back to Meilisearch index data.");
+
+                        // Trust the data we already have in ProductDocument
+                        // If Meilisearch returned it, it's considered active/in-stock based on
+                        // Meilisearch's own filtering.
+                        return products.stream()
+                                .filter(doc -> {
+                                    // Assuming Meilisearch provider already filters by 'isActive = true'
+                                    // So, if it's in 'products', it's considered active by the index.
+                                    return true;
+                                })
+                                .collect(Collectors.toList());
+                    }
+
+                    // Normal Flow (Live Check)
+                    return products.stream()
+                            .filter(product -> Boolean.TRUE.equals(liveStock.get(product.getId())))
                             .collect(Collectors.toList());
-
-                    log.debug("Stock filtering: {} candidates → {} in-stock", products.size(), inStockProducts.size());
-                    return inStockProducts;
                 });
     }
 

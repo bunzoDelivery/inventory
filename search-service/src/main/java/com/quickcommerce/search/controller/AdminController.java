@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
@@ -25,63 +26,55 @@ public class AdminController {
      * Create products index with settings
      */
     @PostMapping("/index/create")
-    public ResponseEntity<Map<String, String>> createIndex() {
+    public Mono<ResponseEntity<Map<String, String>>> createIndex() {
         log.info("Admin: Creating search index");
-        
-        try {
-            meilisearchProvider.createIndex();
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Index created successfully"
-            ));
-        } catch (Exception e) {
-            log.error("Failed to create index", e);
-            return ResponseEntity.status(500).body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
-            ));
-        }
+
+        return meilisearchProvider.createIndex()
+                .then(Mono.fromCallable(() -> ResponseEntity.ok(Map.of(
+                        "status", "success",
+                        "message", "Index created successfully"))))
+                .onErrorResume(e -> {
+                    log.error("Failed to create index", e);
+                    return Mono.just(ResponseEntity.status(500).body(Map.of(
+                            "status", "error",
+                            "message", e.getMessage())));
+                });
     }
 
     /**
      * Update index settings (synonyms, searchable attributes, etc.)
      */
     @PutMapping("/index/settings")
-    public ResponseEntity<Map<String, String>> updateSettings() {
+    public Mono<ResponseEntity<Map<String, String>>> updateSettings() {
         log.info("Admin: Updating index settings");
-        
-        try {
-            meilisearchProvider.updateIndexSettings();
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Settings updated successfully"
-            ));
-        } catch (Exception e) {
-            log.error("Failed to update settings", e);
-            return ResponseEntity.status(500).body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
-            ));
-        }
+
+        return meilisearchProvider.updateIndexSettings()
+                .then(Mono.fromCallable(() -> ResponseEntity.ok(Map.of(
+                        "status", "success",
+                        "message", "Settings updated successfully"))))
+                .onErrorResume(e -> {
+                    log.error("Failed to update settings", e);
+                    return Mono.just(ResponseEntity.status(500).body(Map.of(
+                            "status", "error",
+                            "message", e.getMessage())));
+                });
     }
 
     /**
      * Get index statistics
      */
     @GetMapping("/index/stats")
-    public ResponseEntity<Map<String, Object>> getStats() {
+    public Mono<ResponseEntity<Map<String, Object>>> getStats() {
         log.info("Admin: Getting index stats");
-        
-        try {
-            Map<String, Object> stats = meilisearchProvider.getIndexStats();
-            return ResponseEntity.ok(stats);
-        } catch (Exception e) {
-            log.error("Failed to get stats", e);
-            return ResponseEntity.status(500).body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
-            ));
-        }
+
+        return meilisearchProvider.getIndexStats()
+                .map(stats -> ResponseEntity.ok(stats))
+                .onErrorResume(e -> {
+                    log.error("Failed to get stats", e);
+                    return Mono.just(ResponseEntity.status(500).body(Map.of(
+                            "status", "error",
+                            "message", e.getMessage())));
+                });
     }
 
     /**
@@ -89,21 +82,18 @@ public class AdminController {
      */
     @DeleteMapping("/index")
     @Profile("dev")
-    public ResponseEntity<Map<String, String>> deleteIndex() {
+    public Mono<ResponseEntity<Map<String, String>>> deleteIndex() {
         log.warn("Admin: Deleting search index");
-        
-        try {
-            meilisearchProvider.deleteIndex();
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Index deleted successfully"
-            ));
-        } catch (Exception e) {
-            log.error("Failed to delete index", e);
-            return ResponseEntity.status(500).body(Map.of(
-                "status", "error",
-                "message", e.getMessage()
-            ));
-        }
+
+        return meilisearchProvider.deleteIndex()
+                .then(Mono.fromCallable(() -> ResponseEntity.ok(Map.of(
+                        "status", "success",
+                        "message", "Index deleted successfully"))))
+                .onErrorResume(e -> {
+                    log.error("Failed to delete index", e);
+                    return Mono.just(ResponseEntity.status(500).body(Map.of(
+                            "status", "error",
+                            "message", e.getMessage())));
+                });
     }
 }
