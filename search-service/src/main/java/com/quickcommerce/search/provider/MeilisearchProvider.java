@@ -7,6 +7,8 @@ import com.meilisearch.sdk.model.SearchResult;
 import com.meilisearch.sdk.model.Settings;
 import com.quickcommerce.search.config.MeilisearchProperties;
 import com.quickcommerce.search.model.ProductDocument;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -41,32 +43,34 @@ public class MeilisearchProvider {
      * @param query   Search query string
      * @param storeId Store ID to filter by
      * @param limit   Number of results to return
-     * @return Search results from Meilisearch
+     * @return Mono of Search results from Meilisearch
      */
-    public SearchResult search(String query, Long storeId, int limit) {
-        try {
-            Index index = getProductsIndex();
+    public Mono<SearchResult> search(String query, Long storeId, int limit) {
+        return Mono.fromCallable(() -> {
+            try {
+                Index index = getProductsIndex();
 
-            SearchRequest searchRequest = SearchRequest.builder()
-                    .q(query)
-                    .limit(limit)
-                    .filter(new String[] { buildFilter(storeId) })
-                    .build();
+                SearchRequest searchRequest = SearchRequest.builder()
+                        .q(query)
+                        .limit(limit)
+                        .filter(new String[] { buildFilter(storeId) })
+                        .build();
 
-            log.debug("Executing search query: '{}', storeId: {}, limit: {}", query, storeId, limit);
+                log.debug("Executing search query: '{}', storeId: {}, limit: {}", query, storeId, limit);
 
-            // Index.search() returns Searchable interface - cast to SearchResult
-            Object searchable = index.search(searchRequest);
-            SearchResult result = (SearchResult) searchable;
+                // Index.search() returns Searchable interface - cast to SearchResult
+                Object searchable = index.search(searchRequest);
+                SearchResult result = (SearchResult) searchable;
 
-            log.debug("Search returned {} hits in {}ms", result.getHits().size(), result.getProcessingTimeMs());
+                log.debug("Search returned {} hits in {}ms", result.getHits().size(), result.getProcessingTimeMs());
 
-            return result;
+                return result;
 
-        } catch (Exception e) {
-            log.error("Error executing search query: '{}', storeId: {}", query, storeId, e);
-            throw new RuntimeException("Search failed", e);
-        }
+            } catch (Exception e) {
+                log.error("Error executing search query: '{}', storeId: {}", query, storeId, e);
+                throw new RuntimeException("Search failed", e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**

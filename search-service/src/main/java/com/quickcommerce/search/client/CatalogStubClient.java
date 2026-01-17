@@ -4,13 +4,14 @@ import com.quickcommerce.search.model.ProductDocument;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Stub implementation of CatalogClient for local development
- * Returns empty list for now (can be enhanced with sample data)
+ * Returns dummy bestsellers for fallback testing
  */
 @Slf4j
 @Component
@@ -18,7 +19,7 @@ import java.util.List;
 public class CatalogStubClient implements CatalogClient {
 
     @Override
-    public List<ProductDocument> getBestsellers(Long storeId, int limit) {
+    public Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit) {
         log.debug("STUB: Getting {} bestsellers for store {}", limit, storeId);
 
         // Return some dummy bestsellers for testing fallback
@@ -42,16 +43,16 @@ public class CatalogStubClient implements CatalogClient {
         p2.setIsActive(true);
         p2.setIsBestseller(true);
 
-        return List.of(p1, p2);
+        return Mono.just(List.of(p1, p2));
     }
 
     @Override
-    public List<ProductDocument> getProductsByCategory(Long categoryId, int limit) {
+    public Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit) {
         log.debug("STUB: Getting {} products from category {}", limit, categoryId);
 
         // Stub: return empty list
         log.debug("STUB: Returning empty category products list");
 
-        return new ArrayList<>();
+        return Mono.just(new ArrayList<>());
     }
 }

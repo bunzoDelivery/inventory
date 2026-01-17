@@ -2,6 +2,8 @@ package com.quickcommerce.search.client;
 
 import com.quickcommerce.search.model.ProductDocument;
 
+import reactor.core.publisher.Mono;
+
 import java.util.List;
 
 /**
@@ -14,17 +16,17 @@ public interface CatalogClient {
      * Get bestseller products for a given store
      *
      * @param storeId Store ID
-     * @param limit Number of products to fetch
-     * @return List of bestseller products
+     * @param limit   Number of products to fetch
+     * @return Mono of List of bestseller products
      */
-    List<ProductDocument> getBestsellers(Long storeId, int limit);
+    Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit);
 
     /**
      * Get products by category
      *
      * @param categoryId Category ID
-     * @param limit Number of products to fetch
-     * @return List of products in category
+     * @param limit      Number of products to fetch
+     * @return Mono of List of products in category
      */
-    List<ProductDocument> getProductsByCategory(Long categoryId, int limit);
+    Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit);
 }

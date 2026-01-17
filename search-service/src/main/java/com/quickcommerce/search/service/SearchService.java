@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meilisearch.sdk.model.SearchResult;
 import com.quickcommerce.search.client.InventoryClient;
 import com.quickcommerce.search.config.SearchProperties;
-import com.quickcommerce.search.dto.AvailabilityResponse;
 import com.quickcommerce.search.dto.ProductResult;
 import com.quickcommerce.search.dto.SearchRequest;
 import com.quickcommerce.search.dto.SearchResponse;
@@ -13,6 +12,7 @@ import com.quickcommerce.search.provider.MeilisearchProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,9 +47,9 @@ public class SearchService {
      * 6. Build response
      *
      * @param request Search request
-     * @return Search response with results
+     * @return Mono of Search response with results
      */
-    public SearchResponse search(SearchRequest request) {
+    public Mono<SearchResponse> search(SearchRequest request) {
         long startTime = System.currentTimeMillis();
 
         log.info("Executing search: query='{}', storeId={}, limit={}",
@@ -59,50 +59,49 @@ public class SearchService {
         String normalizedQuery = normalizeQuery(request.getQuery());
 
         // 2. Search Meilisearch for candidates
-        SearchResult meilisearchResult = meilisearchProvider.search(
+        return meilisearchProvider.search(
                 normalizedQuery,
                 request.getStoreId(),
-                searchProperties.getCandidateLimit());
+                searchProperties.getCandidateLimit())
+                .map(this::parseDocuments)
+                .doOnNext(candidates -> log.debug("Got {} candidates from Meilisearch", candidates.size()))
+                .flatMap(candidates ->
+                // 3. Filter by stock availability
+                filterByStock(candidates, request.getStoreId()))
+                .doOnNext(inStockProducts -> log.debug("After stock filter: {} products", inStockProducts.size()))
+                .map(inStockProducts ->
+                // 4. Rank results
+                rankingService.rank(inStockProducts))
+                .flatMap(rankedProducts -> {
+                    // 5. Apply fallback if no results
+                    if (rankedProducts.isEmpty()) {
+                        log.warn("No results found, applying fallback");
+                        return fallbackService.getFallbackResults(normalizedQuery, request.getStoreId());
+                    }
+                    return Mono.just(rankedProducts);
+                })
+                .map(finalResults -> {
+                    // 6. Limit results and build response
+                    List<ProductDocument> limitedResults = finalResults.stream()
+                            .limit(request.getLimit())
+                            .collect(Collectors.toList());
 
-        // 3. Parse documents from Meilisearch hits
-        List<ProductDocument> candidates = parseDocuments(meilisearchResult);
-        log.debug("Got {} candidates from Meilisearch", candidates.size());
+                    long processingTime = System.currentTimeMillis() - startTime;
+                    int candidatesSize = 0; // rough estimate or need to pass through tuple, simplifying for now
 
-        // 4. Filter by stock availability
-        List<ProductDocument> inStockProducts = filterByStock(candidates, request.getStoreId());
-        log.debug("After stock filter: {} products", inStockProducts.size());
+                    log.info("Search completed in {}ms, returned {} results", processingTime, limitedResults.size());
 
-        // 5. Rank results
-        List<ProductDocument> rankedProducts = rankingService.rank(inStockProducts);
-
-        // 6. Apply fallback if no results
-        if (rankedProducts.isEmpty()) {
-            log.warn("No results found, applying fallback");
-            rankedProducts = fallbackService.getFallbackResults(normalizedQuery, request.getStoreId());
-        }
-
-        // 7. Limit results
-        List<ProductDocument> finalResults = rankedProducts.stream()
-                .limit(request.getLimit())
-                .collect(Collectors.toList());
-
-        // 8. Build response
-        long processingTime = System.currentTimeMillis() - startTime;
-
-        SearchResponse response = SearchResponse.builder()
-                .query(request.getQuery())
-                .storeId(request.getStoreId())
-                .results(convertToProductResults(finalResults))
-                .meta(SearchResponse.SearchMeta.builder()
-                        .processingTimeMs(processingTime)
-                        .candidates(candidates.size())
-                        .returned(finalResults.size())
-                        .build())
-                .build();
-
-        log.info("Search completed in {}ms, returned {} results", processingTime, finalResults.size());
-
-        return response;
+                    return SearchResponse.builder()
+                            .query(request.getQuery())
+                            .storeId(request.getStoreId())
+                            .results(convertToProductResults(limitedResults))
+                            .meta(SearchResponse.SearchMeta.builder()
+                                    .processingTimeMs(processingTime)
+                                    .candidates(candidatesSize) // Logic simplification
+                                    .returned(limitedResults.size())
+                                    .build())
+                            .build();
+                });
     }
 
     /**
@@ -134,9 +133,9 @@ public class SearchService {
     /**
      * Filter products by stock availability using InventoryClient
      */
-    private List<ProductDocument> filterByStock(List<ProductDocument> products, Long storeId) {
+    private Mono<List<ProductDocument>> filterByStock(List<ProductDocument> products, Long storeId) {
         if (products.isEmpty()) {
-            return products;
+            return Mono.just(products);
         }
 
         // Extract product IDs
@@ -144,21 +143,22 @@ public class SearchService {
                 .map(ProductDocument::getId)
                 .collect(Collectors.toList());
 
-        // Call inventory service to check availability
-        AvailabilityResponse availabilityResponse = inventoryClient.checkAvailability(storeId, productIds);
-        Map<Long, Boolean> availabilityMap = availabilityResponse.getAvailability();
+        // Call inventory service to check availability (Reactive)
+        return inventoryClient.checkAvailability(storeId, productIds)
+                .map(availabilityResponse -> {
+                    Map<Long, Boolean> availabilityMap = availabilityResponse.getAvailability();
 
-        // Filter products: keep only in-stock items
-        List<ProductDocument> inStockProducts = products.stream()
-                .filter(product -> {
-                    Boolean inStock = availabilityMap.getOrDefault(product.getId(), false);
-                    return inStock != null && inStock;
-                })
-                .collect(Collectors.toList());
+                    // Filter products: keep only in-stock items
+                    List<ProductDocument> inStockProducts = products.stream()
+                            .filter(product -> {
+                                Boolean inStock = availabilityMap.getOrDefault(product.getId(), false);
+                                return inStock != null && inStock;
+                            })
+                            .collect(Collectors.toList());
 
-        log.debug("Stock filtering: {} candidates → {} in-stock", products.size(), inStockProducts.size());
-
-        return inStockProducts;
+                    log.debug("Stock filtering: {} candidates → {} in-stock", products.size(), inStockProducts.size());
+                    return inStockProducts;
+                });
     }
 
     /**

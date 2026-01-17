@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import reactor.core.publisher.Mono;
+
 import java.util.List;
 
 /**
@@ -26,22 +28,21 @@ public class FallbackService {
      * 1. Return bestseller items for the store
      * 2. Never return empty results
      *
-     * @param query Original search query
+     * @param query   Original search query
      * @param storeId Store ID
-     * @return Fallback product list
+     * @return Mono of Fallback product list
      */
-    public List<ProductDocument> getFallbackResults(String query, Long storeId) {
+    public Mono<List<ProductDocument>> getFallbackResults(String query, Long storeId) {
         log.info("Getting fallback results for query: '{}', storeId: {}", query, storeId);
-        
+
         // Fetch bestsellers as fallback
-        List<ProductDocument> bestsellers = catalogClient.getBestsellers(storeId, 20);
-        
-        if (bestsellers.isEmpty()) {
-            log.warn("No fallback results available from catalog client");
-        } else {
-            log.info("Returning {} bestseller products as fallback", bestsellers.size());
-        }
-        
-        return bestsellers;
+        return catalogClient.getBestsellers(storeId, 20)
+                .doOnSuccess(bestsellers -> {
+                    if (bestsellers == null || bestsellers.isEmpty()) {
+                        log.warn("No fallback results available from catalog client");
+                    } else {
+                        log.info("Returning {} bestseller products as fallback", bestsellers.size());
+                    }
+                });
     }
 }

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 /**
  * REST controller for search operations
@@ -27,20 +28,19 @@ public class SearchController {
      * 
      * Request body:
      * {
-     *   "query": "milk",
-     *   "storeId": 1,
-     *   "limit": 20
+     * "query": "milk",
+     * "storeId": 1,
+     * "limit": 20
      * }
      *
      * @param request Search request
-     * @return Search response with results
+     * @return Mono of Search response with results
      */
     @PostMapping
-    public ResponseEntity<SearchResponse> search(@Valid @RequestBody SearchRequest request) {
+    public Mono<ResponseEntity<SearchResponse>> search(@Valid @RequestBody SearchRequest request) {
         log.info("Search request: query='{}', storeId={}", request.getQuery(), request.getStoreId());
-        
-        SearchResponse response = searchService.search(request);
-        
-        return ResponseEntity.ok(response);
+
+        return searchService.search(request)
+                .map(ResponseEntity::ok);
     }
 }
