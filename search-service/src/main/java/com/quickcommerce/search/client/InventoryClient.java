@@ -1,7 +1,7 @@
 package com.quickcommerce.search.client;
 
-import com.quickcommerce.search.dto.AvailabilityRequest;
 import com.quickcommerce.search.dto.AvailabilityResponse;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -14,9 +14,9 @@ public interface InventoryClient {
     /**
      * Check availability of products for a given store
      *
-     * @param storeId Store ID
+     * @param storeId    Store ID
      * @param productIds List of product IDs to check
-     * @return Availability response with stock status map
+     * @return Mono of Availability response with stock status map
      */
-    AvailabilityResponse checkAvailability(Long storeId, List<Long> productIds);
+    Mono<AvailabilityResponse> checkAvailability(Long storeId, List<Long> productIds);
 }
