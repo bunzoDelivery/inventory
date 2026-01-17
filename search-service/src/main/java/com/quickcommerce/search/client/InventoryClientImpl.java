@@ -2,7 +2,6 @@ package com.quickcommerce.search.client;
 
 import com.quickcommerce.search.dto.AvailabilityRequest;
 import com.quickcommerce.search.dto.AvailabilityResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -20,16 +19,21 @@ import java.util.List;
 @Slf4j
 @Component
 @Profile("!dev")
-@RequiredArgsConstructor
 public class InventoryClientImpl implements InventoryClient {
 
-        private final WebClient.Builder webClientBuilder;
+        private final WebClient webClient;
+        private final Duration timeout;
+        private final String inventoryServiceUrl;
 
-        @Value("${clients.inventory.url}")
-        private String inventoryServiceUrl;
-
-        @Value("${clients.inventory.timeout:200ms}")
-        private Duration timeout;
+        public InventoryClientImpl(WebClient.Builder webClientBuilder,
+                        @Value("${clients.inventory.url}") String inventoryServiceUrl,
+                        @Value("${clients.inventory.timeout:200ms}") Duration timeout) {
+                this.inventoryServiceUrl = inventoryServiceUrl;
+                this.timeout = timeout;
+                this.webClient = webClientBuilder
+                                .baseUrl(inventoryServiceUrl)
+                                .build();
+        }
 
         @Override
         public Mono<AvailabilityResponse> checkAvailability(Long storeId, List<Long> productIds) {
@@ -41,9 +45,7 @@ public class InventoryClientImpl implements InventoryClient {
                                 .productIds(productIds)
                                 .build();
 
-                return webClientBuilder
-                                .baseUrl(inventoryServiceUrl)
-                                .build()
+                return webClient
                                 .post()
                                 .uri("/inventory/availability")
                                 .bodyValue(request)
@@ -53,16 +55,11 @@ public class InventoryClientImpl implements InventoryClient {
                                 .doOnSuccess(response -> log.debug("Received availability response for {} products",
                                                 response.getAvailability().size()))
                                 .onErrorResume(e -> {
-                                        log.error("Error calling inventory service", e);
-                                        // Fallback: assume all in stock on error (fail-open)
-                                        log.warn("Falling back to assume all products in-stock");
-
+                                        log.error("Inventory Service unavailable (timeout/error): {}", e.getMessage());
+                                        // Return response with NULL availability map to signal failure
                                         return Mono.just(AvailabilityResponse.builder()
                                                         .storeId(storeId)
-                                                        .availability(productIds.stream()
-                                                                        .collect(java.util.stream.Collectors.toMap(
-                                                                                        id -> id,
-                                                                                        id -> true)))
+                                                        .availability(null)
                                                         .build());
                                 });
         }

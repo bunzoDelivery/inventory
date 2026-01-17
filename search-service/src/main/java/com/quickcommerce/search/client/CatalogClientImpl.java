@@ -1,7 +1,6 @@
 package com.quickcommerce.search.client;
 
 import com.quickcommerce.search.model.ProductDocument;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -21,67 +20,69 @@ import java.util.List;
 @Slf4j
 @Component
 @Profile("!dev")
-@RequiredArgsConstructor
 public class CatalogClientImpl implements CatalogClient {
 
-    private final WebClient.Builder webClientBuilder;
+        private final WebClient webClient;
+        private final Duration timeout;
+        private final String catalogServiceUrl;
 
-    @Value("${clients.catalog.url}")
-    private String catalogServiceUrl;
+        public CatalogClientImpl(WebClient.Builder webClientBuilder,
+                        @Value("${clients.catalog.url}") String catalogServiceUrl,
+                        @Value("${clients.catalog.timeout:300ms}") Duration timeout) {
+                this.catalogServiceUrl = catalogServiceUrl;
+                this.timeout = timeout;
+                this.webClient = webClientBuilder
+                                .baseUrl(catalogServiceUrl)
+                                .build();
+        }
 
-    @Value("${clients.catalog.timeout:300ms}")
-    private Duration timeout;
+        @Override
+        public Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit) {
+                log.debug("Getting {} bestsellers for store {} from {}",
+                                limit, storeId, catalogServiceUrl);
 
-    @Override
-    public Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit) {
-        log.debug("Getting {} bestsellers for store {} from {}",
-                limit, storeId, catalogServiceUrl);
+                return webClient
+                                .get()
+                                .uri(uriBuilder -> uriBuilder
+                                                .path("/catalog/products/bestsellers")
+                                                .queryParam("storeId", storeId)
+                                                .queryParam("limit", limit)
+                                                .build())
+                                .retrieve()
+                                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
+                                })
+                                .timeout(timeout)
+                                .doOnSuccess(products -> log.debug("Received {} bestseller products",
+                                                products != null ? products.size() : 0))
+                                .onErrorResume(e -> {
+                                        log.error("Error calling catalog service for bestsellers", e);
+                                        return Mono.just(new ArrayList<>());
+                                })
+                                .map(products -> products != null ? products : new ArrayList<>());
+        }
 
-        return webClientBuilder
-                .baseUrl(catalogServiceUrl)
-                .build()
-                .get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/catalog/products/bestsellers")
-                        .queryParam("storeId", storeId)
-                        .queryParam("limit", limit)
-                        .build())
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
-                })
-                .timeout(timeout)
-                .doOnSuccess(products -> log.debug("Received {} bestseller products",
-                        products != null ? products.size() : 0))
-                .onErrorResume(e -> {
-                    log.error("Error calling catalog service for bestsellers", e);
-                    return Mono.just(new ArrayList<>());
-                })
-                .map(products -> products != null ? products : new ArrayList<>());
-    }
+        @Override
+        public Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit) {
+                log.debug("Getting {} products from category {} from {}",
+                                limit, categoryId, catalogServiceUrl);
 
-    @Override
-    public Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit) {
-        log.debug("Getting {} products from category {} from {}",
-                limit, categoryId, catalogServiceUrl);
-
-        return webClientBuilder
-                .baseUrl(catalogServiceUrl)
-                .build()
-                .get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/catalog/categories/{id}/products")
-                        .queryParam("limit", limit)
-                        .build(categoryId))
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
-                })
-                .timeout(timeout)
-                .doOnSuccess(
-                        products -> log.debug("Received {} category products", products != null ? products.size() : 0))
-                .onErrorResume(e -> {
-                    log.error("Error calling catalog service for category products", e);
-                    return Mono.just(new ArrayList<>());
-                })
-                .map(products -> products != null ? products : new ArrayList<>());
-    }
+                return webClient
+                                .get()
+                                .uri(uriBuilder -> uriBuilder
+                                                .path("/catalog/categories/{id}/products")
+                                                .queryParam("limit", limit)
+                                                .build(categoryId))
+                                .retrieve()
+                                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
+                                })
+                                .timeout(timeout)
+                                .doOnSuccess(
+                                                products -> log.debug("Received {} category products",
+                                                                products != null ? products.size() : 0))
+                                .onErrorResume(e -> {
+                                        log.error("Error calling catalog service for category products", e);
+                                        return Mono.just(new ArrayList<>());
+                                })
+                                .map(products -> products != null ? products : new ArrayList<>());
+        }
 }
