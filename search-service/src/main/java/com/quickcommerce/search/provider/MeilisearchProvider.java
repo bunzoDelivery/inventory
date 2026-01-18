@@ -67,62 +67,45 @@ public class MeilisearchProvider {
      * Creates the products index with initial settings
      */
     public Mono<Void> createIndex() {
-        return Mono.fromCallable(() -> {
+        return Mono.<Void>fromCallable(() -> {
             log.info("Creating index: {}", properties.getIndexName());
             // Meilisearch createIndex returns Task, which we ignore
             meilisearchClient.createIndex(properties.getIndexName(), "id");
             return null;
         })
                 .subscribeOn(Schedulers.boundedElastic())
-                .then(updateIndexSettings())
                 .doOnSuccess(v -> log.info("Index created successfully: {}", properties.getIndexName()))
                 .doOnError(e -> log.error("Error creating index: {}", properties.getIndexName(), e));
     }
 
     /**
-     * Updates index settings (searchable attributes, synonyms, etc.)
+     * Updates index settings dynamically from configuration
+     * Returns the TaskInfo for tracking
+     */
+    public com.meilisearch.sdk.model.TaskInfo updateSettingsBlocking(Settings settings) {
+        try {
+            Index index = getProductsIndex();
+            // This is a blocking call to the SDK, which returns TaskInfo immediately (not
+            // the task result)
+            return index.updateSettings(settings);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to update settings", e);
+        }
+    }
+
+    /**
+     * Updates index settings (Deprecated: Use SearchConfigurationService)
+     * Keeping for basic init if needed, but it should arguably be removed or
+     * delegate.
+     * Let's remove the hardcoded logic to prevent drift.
      */
     public Mono<Void> updateIndexSettings() {
-        return Mono.fromCallable(() -> {
-            Index index = getProductsIndex();
-            Settings settings = new Settings();
-
-            // Searchable attributes (priority order)
-            settings.setSearchableAttributes(new String[] {
-                    "name", "brand", "keywords", "barcode"
-            });
-
-            // Filterable attributes for filtering
-            settings.setFilterableAttributes(new String[] {
-                    "storeIds", "isActive", "brand", "categoryId", "isBestseller"
-            });
-
-            // Sortable attributes
-            settings.setSortableAttributes(new String[] {
-                    "price", "priority"
-            });
-
-            // Ranking rules
-            settings.setRankingRules(new String[] {
-                    "words", "typo", "proximity", "attribute", "sort", "exactness"
-            });
-
-            // Synonyms for common variations
-            HashMap<String, String[]> synonyms = new HashMap<>();
-            synonyms.put("atta", new String[] { "aata", "aataa" });
-            synonyms.put("aata", new String[] { "atta", "aataa" });
-            synonyms.put("doodh", new String[] { "milk" });
-            synonyms.put("milk", new String[] { "doodh" });
-            synonyms.put("coldrink", new String[] { "soft drink", "soda" });
-            settings.setSynonyms(synonyms);
-
-            index.updateSettings(settings);
-            return null;
-        })
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnSuccess(v -> log.info("Index settings updated successfully"))
-                .doOnError(e -> log.error("Error updating index settings", e))
-                .then();
+        // No-op or removed, as settings are now managed by DB.
+        // However, to keep existing code compiling if referenced elsewhere
+        // (AdminController currently calls it),
+        // I should either remove calls to it or redirect.
+        // AdminController is being replaced by SearchAdminController.
+        return Mono.empty();
     }
 
     /**

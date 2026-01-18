@@ -1,7 +1,17 @@
 spring:
   application:
     name: search-service
-
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/inventory?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
 server:
   port: 8083
 
