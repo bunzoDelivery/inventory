@@ -114,8 +114,11 @@ public class ProductDocument {
     /**
      * Search priority (0-100, higher = better)
      */
-    @JsonProperty("priority")
-    private Integer priority;
+    /**
+     * Search priority (0-100, higher = better)
+     */
+    @JsonProperty("searchPriority")
+    private Integer searchPriority;
 
     /**
      * Bestseller flag

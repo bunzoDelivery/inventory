@@ -15,11 +15,8 @@ meilisearch:
 clients:
   inventory:
     url: http://localhost:8081
-    # Use stub client for local dev
-    useStub: true
   catalog:
     url: http://localhost:8082
-    useStub: true
 
 # Detailed logging for development
 logging:

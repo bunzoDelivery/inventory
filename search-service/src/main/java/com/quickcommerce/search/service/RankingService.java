@@ -31,22 +31,21 @@ public class RankingService {
      */
     public List<ProductDocument> rank(List<ProductDocument> documents) {
         log.debug("Ranking {} documents", documents.size());
-        
+
         documents.sort(Comparator
                 // 1. Bestseller first (nulls last)
-                .comparing(ProductDocument::getIsBestseller, 
-                          Comparator.nullsLast(Comparator.reverseOrder()))
+                .comparing(ProductDocument::getIsBestseller,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
                 // 2. Higher priority first (nulls last)
-                .thenComparing(ProductDocument::getPriority, 
-                              Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(ProductDocument::getSearchPriority,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
                 // 3. More orders first (popularity, nulls last)
-                .thenComparing(ProductDocument::getOrderCount, 
-                              Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(ProductDocument::getOrderCount,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
                 // 4. Lower price first (tie-breaker, nulls last)
-                .thenComparing(ProductDocument::getPrice, 
-                              Comparator.nullsLast(Comparator.naturalOrder()))
-        );
-        
+                .thenComparing(ProductDocument::getPrice,
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+
         return documents;
     }
 }

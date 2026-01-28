@@ -15,7 +15,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("stub")
 public class CatalogStubClient implements CatalogClient {
 
     @Override
@@ -54,5 +54,12 @@ public class CatalogStubClient implements CatalogClient {
         log.debug("STUB: Returning empty category products list");
 
         return Mono.just(new ArrayList<>());
+    }
+
+    @Override
+    public reactor.core.publisher.Flux<ProductDocument> getAllProducts() {
+        log.debug("STUB: Fetching all products");
+        // Reuse bestsellers as dummy data for bulk sync testing
+        return getBestsellers(1L, 10).flatMapMany(reactor.core.publisher.Flux::fromIterable);
     }
 }
