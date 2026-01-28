@@ -90,6 +90,14 @@ public class ProductController {
     }
 
     /**
+     * Get all products (including inactive)
+     */
+    @GetMapping("/all")
+    public Flux<ProductResponse> getAllProducts() {
+        return catalogService.getAllProducts();
+    }
+
+    /**
      * Get products by price range
      */
     @GetMapping("/price-range")

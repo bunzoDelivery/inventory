@@ -31,9 +31,23 @@ public class SearchRequest {
     private Long storeId;
 
     /**
-     * Maximum number of results to return (1-100)
+     * Page number (1-indexed, default 1)
      */
-    @Min(value = 1, message = "Limit must be at least 1")
-    @Max(value = 100, message = "Limit cannot exceed 100")
-    private Integer limit = 20;
+    @Min(value = 1, message = "Page must be at least 1")
+    @Builder.Default
+    private Integer page = 1;
+
+    /**
+     * Number of results per page (max 100, default 20)
+     */
+    @Min(value = 1, message = "Page size must be at least 1")
+    @Max(value = 100, message = "Page size cannot exceed 100")
+    @Builder.Default
+    private Integer pageSize = 20;
+
+    /**
+     * @deprecated Use pageSize instead
+     */
+    @Deprecated
+    private Integer limit; // Retain for backward compat, mapped to pageSize in service
 }

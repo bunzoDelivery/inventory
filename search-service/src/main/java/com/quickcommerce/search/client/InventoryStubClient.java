@@ -16,7 +16,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@Profile("dev")
+@Profile("stub")
 public class InventoryStubClient implements InventoryClient {
 
     @Override

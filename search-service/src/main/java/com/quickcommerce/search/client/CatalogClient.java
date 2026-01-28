@@ -29,4 +29,12 @@ public interface CatalogClient {
      * @return Mono of List of products in category
      */
     Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit);
+
+    /**
+     * Get all products from catalog
+     * Used for bulk indexing
+     *
+     * @return Flux of ProductDocument
+     */
+    reactor.core.publisher.Flux<ProductDocument> getAllProducts();
 }

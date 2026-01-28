@@ -44,7 +44,7 @@ public class SearchResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SearchMeta {
-        
+
         /**
          * Processing time in milliseconds
          */
@@ -59,5 +59,25 @@ public class SearchResponse {
          * Number of results returned after filtering
          */
         private Integer returned;
+
+        /**
+         * Current page number
+         */
+        private Integer page;
+
+        /**
+         * Results per page
+         */
+        private Integer pageSize;
+
+        /**
+         * Total number of pages
+         */
+        private Integer totalPages;
+
+        /**
+         * Total number of matching results
+         */
+        private Integer totalHits;
     }
 }

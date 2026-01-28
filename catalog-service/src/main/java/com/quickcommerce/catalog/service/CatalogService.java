@@ -200,6 +200,14 @@ public class CatalogService {
     }
 
     /**
+     * Get all products (admin/sync use)
+     */
+    public Flux<ProductResponse> getAllProducts() {
+        return productRepository.findAll()
+                .map(ProductResponse::fromDomain);
+    }
+
+    /**
      * Get all available products
      */
     public Flux<ProductResponse> getAllAvailableProducts() {

@@ -3,7 +3,6 @@ package com.quickcommerce.search.client;
 import com.quickcommerce.search.model.ProductDocument;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -19,7 +18,6 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@Profile("!dev")
 public class CatalogClientImpl implements CatalogClient {
 
         private final WebClient webClient;
@@ -84,5 +82,24 @@ public class CatalogClientImpl implements CatalogClient {
                                         return Mono.just(new ArrayList<>());
                                 })
                                 .map(products -> products != null ? products : new ArrayList<>());
+        }
+
+        @Override
+        public reactor.core.publisher.Flux<ProductDocument> getAllProducts() {
+                log.info("Fetching all products from available catalog: {}", catalogServiceUrl);
+                return webClient
+                                .get()
+                                .uri("/api/v1/catalog/products/all") // Updated to point to new endpoint
+                                // MVP: Simplified to a single large fetch or JSON stream
+                                // Real world: Pagination required. For MVP, assuming a specific "stream" or
+                                // "all" endpoint.
+                                // Let's assume /catalog/products returns a list, we will convert to Flux
+                                .retrieve()
+                                .bodyToFlux(ProductDocument.class)
+                                .timeout(Duration.ofSeconds(60)) // Longer timeout for bulk fetch
+                                .onErrorResume(e -> {
+                                        log.error("Error fetching all products from catalog", e);
+                                        return reactor.core.publisher.Flux.empty();
+                                });
         }
 }

@@ -42,24 +42,31 @@ public class MeilisearchProvider {
     /**
      * Search for products using query and filters
      */
-    public Mono<SearchResult> search(String query, Long storeId, int limit) {
+    /**
+     * Search for products using query, filters, and pagination
+     */
+    public Mono<SearchResult> search(String query, Long storeId, int page, int pageSize) {
         return Mono.fromCallable(() -> {
             Index index = getProductsIndex();
 
+            int offset = (page - 1) * pageSize;
+
             SearchRequest searchRequest = SearchRequest.builder()
                     .q(query)
-                    .limit(limit)
+                    .offset(offset)
+                    .limit(pageSize)
                     .filter(new String[] { buildFilter(storeId) })
                     .build();
 
-            log.debug("Executing search query: '{}', storeId: {}, limit: {}", query, storeId, limit);
+            log.debug("Executing search: '{}', storeId: {}, page: {}, size: {}, offset: {}",
+                    query, storeId, page, pageSize, offset);
 
             // Index.search() returns Searchable interface - cast to SearchResult
             return (SearchResult) index.search(searchRequest);
         })
                 .subscribeOn(Schedulers.boundedElastic())
-                .doOnSuccess(result -> log.debug("Search returned {} hits in {}ms",
-                        result.getHits().size(), result.getProcessingTimeMs()))
+                .doOnSuccess(result -> log.debug("Search returned {} hits (total: {}) in {}ms",
+                        result.getHits().size(), result.getEstimatedTotalHits(), result.getProcessingTimeMs()))
                 .doOnError(e -> log.error("Error executing search query: '{}', storeId: {}", query, storeId, e));
     }
 

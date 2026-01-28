@@ -34,6 +34,22 @@ public class SearchAdminController {
     /**
      * Trigger synchronization to Meilisearch
      */
+    private final com.quickcommerce.search.service.IndexSyncService indexSyncService;
+
+    /**
+     * Trigger manual bulk sync of product data
+     */
+    @PostMapping("/index/sync-data")
+    public Mono<ResponseEntity<Map<String, String>>> syncData() {
+        // Run in background, don't wait for full completion to return response
+        indexSyncService.syncAllProducts()
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                .subscribe();
+
+        return Mono.just(ResponseEntity.accepted().body(Map.of(
+                "message", "Bulk data sync triggered in background")));
+    }
+
     @PostMapping("/sync")
     public Mono<ResponseEntity<Map<String, Object>>> syncConfiguration() {
         return configurationService.publishConfiguration()
