@@ -20,6 +20,11 @@ public class AddStockRequest {
     @NotBlank(message = "SKU is required")
     private String sku;
 
+    @NotNull(message = "Store ID is required")
+    private Long storeId;
+
+    private Long productId;
+
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")
     private Integer quantity;
