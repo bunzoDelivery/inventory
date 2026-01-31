@@ -75,7 +75,6 @@
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
-            <scope>runtime</scope>
         </dependency>
 
 
@@ -165,11 +164,7 @@
         </dependency>
 
         <!-- MySQL JDBC Driver for Testcontainers -->
-        <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
-            <scope>test</scope>
-        </dependency>
+
 
     </dependencies>
 
