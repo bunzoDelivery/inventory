@@ -23,9 +23,6 @@
         <module>common</module>
         <module>product-service</module>
         <module>search-service</module>
-        <!-- Old services - will be deprecated -->
-        <module>inventory-service</module>
-        <module>catalog-service</module>
     </modules>
 
     <properties>
@@ -84,17 +81,6 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <dependency>
-                <groupId>com.quickcommerce</groupId>
-                <artifactId>inventory-service</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.quickcommerce</groupId>
-                <artifactId>catalog-service</artifactId>
-                <version>${project.version}</version>
-            </dependency>
 
             <!-- Meilisearch Java Client -->
             <dependency>
