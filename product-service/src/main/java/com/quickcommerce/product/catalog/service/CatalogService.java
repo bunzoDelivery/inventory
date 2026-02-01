@@ -8,6 +8,8 @@ import com.quickcommerce.product.catalog.repository.ProductRepository;
 import com.quickcommerce.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -32,6 +34,7 @@ public class CatalogService {
      * Create a new category
      */
     @Transactional
+    @CacheEvict(value = "categories:all", allEntries = true)
     public Mono<CategoryResponse> createCategory(CreateCategoryRequest request) {
         log.info("Creating category: {}", request.getName());
 
@@ -59,6 +62,7 @@ public class CatalogService {
     /**
      * Get category by ID
      */
+    @Cacheable(value = "categories", key = "#id")
     public Mono<CategoryResponse> getCategoryById(Long id) {
         return categoryRepository.findById(id)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Category", id.toString())))
@@ -91,8 +95,9 @@ public class CatalogService {
     }
 
     /**
-     * Get all active categories
+     * Get all active categories (cached for 10 minutes)
      */
+    @Cacheable(value = "categories:all")
     public Flux<CategoryResponse> getAllActiveCategories() {
         return categoryRepository.findAllActive()
                 .map(CategoryResponse::fromDomain);
@@ -148,8 +153,9 @@ public class CatalogService {
     }
 
     /**
-     * Get product by ID
+     * Get product by ID (cached for 5 minutes)
      */
+    @Cacheable(value = "products", key = "#id")
     public Mono<ProductResponse> getProductById(Long id) {
         return productRepository.findById(id)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Product", id.toString())))
@@ -157,8 +163,9 @@ public class CatalogService {
     }
 
     /**
-     * Get product by SKU
+     * Get product by SKU (cached for 5 minutes)
      */
+    @Cacheable(value = "products", key = "'sku:' + #sku")
     public Mono<ProductResponse> getProductBySku(String sku) {
         return productRepository.findBySku(sku)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Product", sku)))
@@ -191,11 +198,13 @@ public class CatalogService {
     }
 
     /**
-     * Search products by term
+     * Search products by term (optimized with smart query selection)
      */
     public Flux<ProductResponse> searchProducts(String searchTerm, Integer limit) {
         int searchLimit = (limit != null && limit > 0) ? limit : 50;
-        return productRepository.searchProducts(searchTerm, searchLimit)
+        
+        // Use smart search that chooses between LIKE and FULLTEXT based on query length
+        return productRepository.searchProductsSmart(searchTerm, searchLimit)
                 .map(ProductResponse::fromDomain);
     }
 

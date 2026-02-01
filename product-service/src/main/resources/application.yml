@@ -2,13 +2,123 @@ spring:
   application:
     name: product-service
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # Production Database Configuration (with environment variable support)
+  r2dbc:
+    url: r2dbc:mysql://${DB_HOST:inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com}:${DB_PORT:3306}/${DB_NAME:inventory}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:mysqlInv2025}
+    pool:
+      initial-size: 20
+      max-size: 50
+      max-idle-time: 10m
+      max-acquire-time: 3s
+      max-life-time: 30m
+      max-create-connection-time: 2s
+      validation-query: SELECT 1
+  
+  # Flyway Configuration (uses JDBC for migrations)
+  flyway:
+    enabled: true
+    url: jdbc:mysql://${DB_HOST:inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com}:${DB_PORT:3306}/${DB_NAME:inventory}
+    user: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:mysqlInv2025}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+  
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60000  # 60 seconds default
+      cache-null-values: false
+
+# Server Configuration
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  netty:
+    connection-timeout: 30s
+    idle-timeout: 60s
+    max-connections: 2000
 
+# Actuator & Management
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  tracing:
+    sampling:
+      probability: 0.1
+
+# Logging Configuration (Production defaults)
+logging:
+  level:
+    root: INFO
+    com.quickcommerce: INFO
+    org.springframework.r2dbc: WARN
+    org.springframework.security: WARN
+    reactor.netty: WARN
+  file:
+    name: ${LOG_FILE:/var/log/product-service/product-service.log}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Inventory Configuration
+inventory:
+  reservation:
+    ttl-minutes: 15
+    cleanup-interval-seconds: 60
+  stock:
+    safety-stock-multiplier: 1.5
+    default-safety-stock: 10
+    default-max-stock: 1000
+
+# Messaging Configuration (disabled by default)
+messaging:
+  enabled: false
+
+# Resilience4j Configuration
+resilience4j:
+  ratelimiter:
+    instances:
+      inventory-api:
+        limit-for-period: 100
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+  circuitbreaker:
+    instances:
+      inventory-db:
+        sliding-window-size: 100
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 10

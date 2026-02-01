@@ -2,18 +2,32 @@ package com.quickcommerce.product.event;
 
 import com.quickcommerce.product.domain.InventoryItem;
 import com.quickcommerce.product.domain.StockMovement;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * Event listener for inventory-related events
+ * RabbitMQ integration is optional - falls back to logging if messaging is disabled
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class InventoryEventListener {
+
+    private final Optional<RabbitTemplate> rabbitTemplate;
+
+    public InventoryEventListener(Optional<RabbitTemplate> rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+        if (rabbitTemplate.isPresent()) {
+            log.info("RabbitMQ messaging enabled for inventory events");
+        } else {
+            log.info("RabbitMQ messaging disabled - events will be logged only");
+        }
+    }
 
     /**
      * Handle stock movement events
@@ -29,9 +43,8 @@ public class InventoryEventListener {
                 movement.getInventoryItemId(),
                 movement.getReferenceId());
 
-        // TODO: Send to message queue for other services
-        // TODO: Update metrics
-        // TODO: Trigger notifications if needed
+        // Send to message queue if messaging is enabled
+        publishToQueue("stock.movements", event);
     }
 
     /**
@@ -48,8 +61,25 @@ public class InventoryEventListener {
                 item.getSafetyStock(),
                 item.getStoreId());
 
-        // TODO: Send notification to store manager
-        // TODO: Update metrics
-        // TODO: Trigger reorder process
+        // Send to message queue if messaging is enabled
+        publishToQueue("stock.alerts", event);
+    }
+
+    /**
+     * Publish event to RabbitMQ or log if messaging is disabled
+     */
+    private void publishToQueue(String queueName, Object event) {
+        rabbitTemplate.ifPresentOrElse(
+            template -> {
+                try {
+                    template.convertAndSend(queueName, event);
+                    log.debug("Published event to queue: {}", queueName);
+                } catch (AmqpException e) {
+                    log.error("Failed to publish event to queue: {}", queueName, e);
+                    // Fallback: Event already logged above
+                }
+            },
+            () -> log.debug("Messaging disabled - event logged only (queue: {})", queueName)
+        );
     }
 }

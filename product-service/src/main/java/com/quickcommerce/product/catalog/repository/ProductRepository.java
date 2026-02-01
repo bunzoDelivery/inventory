@@ -44,6 +44,43 @@ public interface ProductRepository extends R2dbcRepository<Product, Long> {
     Flux<Product> searchProducts(String searchTerm, Integer limit);
 
     /**
+     * Search products using MySQL FULLTEXT index (faster for longer queries)
+     * Uses MATCH...AGAINST for better performance on indexed columns
+     */
+    @Query("""
+        SELECT * FROM products 
+        WHERE MATCH(name, description, tags) AGAINST (:searchTerm IN NATURAL LANGUAGE MODE)
+          AND is_active = TRUE 
+          AND is_available = TRUE
+        ORDER BY 
+            CASE WHEN is_bestseller = TRUE THEN 1 ELSE 2 END,
+            COALESCE(search_priority, 0) DESC,
+            COALESCE(order_count, 0) DESC
+        LIMIT :limit
+        """)
+    Flux<Product> searchProductsFullText(String searchTerm, Integer limit);
+
+    /**
+     * Smart search: uses FULLTEXT for longer queries (>= 4 chars), LIKE for shorter ones
+     * This provides best performance across different query lengths
+     */
+    default Flux<Product> searchProductsSmart(String searchTerm, Integer limit) {
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return Flux.empty();
+        }
+        
+        String trimmedTerm = searchTerm.trim();
+        
+        // Use FULLTEXT for longer queries (better performance with indexed columns)
+        if (trimmedTerm.length() >= 4) {
+            return searchProductsFullText(trimmedTerm, limit);
+        }
+        
+        // Use LIKE for short queries (FULLTEXT requires minimum word length)
+        return searchProducts(trimmedTerm, limit);
+    }
+
+    /**
      * Find all active and available products
      */
     @Query("SELECT * FROM products WHERE is_active = TRUE AND is_available = TRUE ORDER BY name")

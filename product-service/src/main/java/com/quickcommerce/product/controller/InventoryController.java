@@ -148,8 +148,14 @@ public class InventoryController {
     public Mono<ResponseEntity<InventoryAvailabilityResponse>> checkInventoryAvailability(
             @Valid @RequestBody InventoryAvailabilityRequest request) {
 
-        log.info("Checking inventory availability for store: {} and SKUs: {}",
-                request.getStoreId(), request.getSkus());
+        log.info("Checking inventory availability for store: {} and {} SKUs",
+                request.getStoreId(), request.getSkus().size());
+
+        // Validate request size to prevent abuse
+        if (request.getSkus().size() > 100) {
+            log.warn("Availability check rejected: too many SKUs requested ({})", request.getSkus().size());
+            return Mono.just(ResponseEntity.badRequest().build());
+        }
 
         return inventoryService.checkInventoryAvailability(request.getStoreId(), request.getSkus())
                 .map(ResponseEntity::ok)
