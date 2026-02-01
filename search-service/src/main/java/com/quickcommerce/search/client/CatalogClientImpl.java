@@ -42,7 +42,7 @@ public class CatalogClientImpl implements CatalogClient {
                 return webClient
                                 .get()
                                 .uri(uriBuilder -> uriBuilder
-                                                .path("/catalog/products/bestsellers")
+                                                .path("/api/v1/catalog/products/bestsellers")
                                                 .queryParam("storeId", storeId)
                                                 .queryParam("limit", limit)
                                                 .build())
@@ -67,7 +67,7 @@ public class CatalogClientImpl implements CatalogClient {
                 return webClient
                                 .get()
                                 .uri(uriBuilder -> uriBuilder
-                                                .path("/catalog/categories/{id}/products")
+                                                .path("/api/v1/catalog/products/category/{categoryId}")
                                                 .queryParam("limit", limit)
                                                 .build(categoryId))
                                 .retrieve()

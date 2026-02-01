@@ -8,7 +8,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Repository for Product entity with reactive operations and search capabilities
+ * Repository for Product entity with reactive operations and search
+ * capabilities
  */
 @Repository
 public interface ProductRepository extends R2dbcRepository<Product, Long> {
@@ -47,6 +48,12 @@ public interface ProductRepository extends R2dbcRepository<Product, Long> {
      */
     @Query("SELECT * FROM products WHERE is_active = TRUE AND is_available = TRUE ORDER BY name")
     Flux<Product> findAllAvailable();
+
+    /**
+     * Find bestseller products
+     */
+    @Query("SELECT * FROM products WHERE is_active = TRUE AND is_available = TRUE AND is_bestseller = TRUE ORDER BY name LIMIT :limit")
+    Flux<Product> findBestsellers(Integer limit);
 
     /**
      * Find products with price range

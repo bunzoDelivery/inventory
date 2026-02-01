@@ -216,6 +216,15 @@ public class CatalogService {
     }
 
     /**
+     * Get bestseller products
+     */
+    public Flux<ProductResponse> getBestsellers(Integer limit) {
+        int searchLimit = (limit != null && limit > 0) ? limit : 20;
+        return productRepository.findBestsellers(searchLimit)
+                .map(ProductResponse::fromDomain);
+    }
+
+    /**
      * Get products by price range
      */
     public Flux<ProductResponse> getProductsByPriceRange(Double minPrice, Double maxPrice) {

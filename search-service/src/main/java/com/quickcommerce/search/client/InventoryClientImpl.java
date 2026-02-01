@@ -45,7 +45,7 @@ public class InventoryClientImpl implements InventoryClient {
 
                 return webClient
                                 .post()
-                                .uri("/inventory/availability")
+                                .uri("/api/v1/inventory/availability")
                                 .bodyValue(request)
                                 .retrieve()
                                 .bodyToMono(AvailabilityResponse.class)

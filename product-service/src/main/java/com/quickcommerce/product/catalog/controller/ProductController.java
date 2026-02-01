@@ -90,6 +90,15 @@ public class ProductController {
     }
 
     /**
+     * Get bestseller products
+     */
+    @GetMapping("/bestsellers")
+    public Flux<ProductResponse> getBestsellers(
+            @RequestParam(required = false, defaultValue = "20") Integer limit) {
+        return catalogService.getBestsellers(limit);
+    }
+
+    /**
      * Get all products (including inactive)
      */
     @GetMapping("/all")
