@@ -1,0 +1,35 @@
+# Test Environment Configuration
+spring:
+  r2dbc:
+    url: r2dbc:tc:mysql:///testdb?TC_IMAGE_TAG=8.0
+    pool:
+      initial-size: 5
+      max-size: 10
+      max-idle-time: 5m
+  
+  flyway:
+    enabled: false  # Testcontainers handles schema
+
+# Test Logging (minimal)
+logging:
+  level:
+    root: WARN
+    com.quickcommerce: INFO
+    org.springframework.r2dbc: WARN
+    org.testcontainers: INFO
+
+# Inventory test settings
+inventory:
+  reservation:
+    ttl-minutes: 1  # Faster expiry for tests
+    cleanup-interval-seconds: 10
+
+# Disable unnecessary features in tests
+messaging:
+  enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

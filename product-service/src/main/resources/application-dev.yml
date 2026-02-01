@@ -1,3 +1,4 @@
+# Development Environment Overrides
 spring:
   r2dbc:
     url: r2dbc:mysql://localhost:3306/inventory
@@ -9,13 +10,18 @@ spring:
       max-idle-time: 30m
 
   flyway:
-    enabled: true
     url: jdbc:mysql://localhost:3306/inventory
     user: root
     password: root
-    locations: classpath:db/migration
-    baseline-on-migrate: true
 
+  # Dev Redis (local)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+
+# Development Logging (verbose)
 logging:
   level:
     root: INFO
@@ -24,6 +30,11 @@ logging:
     org.springframework.data.r2dbc: DEBUG
     io.r2dbc.mysql: DEBUG
     org.flywaydb: DEBUG
+  file:
+    name: ./logs/product-service-dev.log
 
+# Development Server Settings
 server:
   port: 8081
+  netty:
+    connection-timeout: 30s
