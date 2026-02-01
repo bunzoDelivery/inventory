@@ -1,0 +1,29 @@
+spring:
+  r2dbc:
+    url: r2dbc:mysql://localhost:3306/inventory
+    username: root
+    password: root
+    pool:
+      initial-size: 10
+      max-size: 20
+      max-idle-time: 30m
+
+  flyway:
+    enabled: true
+    url: jdbc:mysql://localhost:3306/inventory
+    user: root
+    password: root
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+logging:
+  level:
+    root: INFO
+    com.quickcommerce: DEBUG
+    org.springframework.r2dbc: DEBUG
+    org.springframework.data.r2dbc: DEBUG
+    io.r2dbc.mysql: DEBUG
+    org.flywaydb: DEBUG
+
+server:
+  port: 8081
