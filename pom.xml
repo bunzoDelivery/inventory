@@ -21,9 +21,11 @@
 
     <modules>
         <module>common</module>
+        <module>product-service</module>
+        <module>search-service</module>
+        <!-- Old services - will be deprecated -->
         <module>inventory-service</module>
         <module>catalog-service</module>
-        <module>search-service</module>
     </modules>
 
     <properties>

@@ -13,10 +13,10 @@ meilisearch:
   apiKey: masterKey
 
 clients:
-  inventory:
-    url: http://localhost:8081
   catalog:
-    url: http://localhost:8082
+    url: http://localhost:8081  # Now pointing to product-service
+  inventory:
+    url: http://localhost:8081  # Now pointing to product-service2
 
 # Detailed logging for development
 logging:
