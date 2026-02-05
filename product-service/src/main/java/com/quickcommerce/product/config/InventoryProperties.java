@@ -19,6 +19,7 @@ public class InventoryProperties {
 
     private Reservation reservation = new Reservation();
     private Stock stock = new Stock();
+    private Sync sync = new Sync();
 
     /**
      * Stock reservation configuration
@@ -70,5 +71,25 @@ public class InventoryProperties {
          */
         @Min(100)
         private int defaultMaxStock = 1000;
+    }
+
+    /**
+     * Bulk sync configuration
+     */
+    @Data
+    public static class Sync {
+        /**
+         * Batch size for processing sync items (10-100)
+         */
+        @Min(10)
+        @Max(100)
+        private int batchSize = 50;
+
+        /**
+         * Maximum number of items allowed per sync request (1-500)
+         */
+        @Min(1)
+        @Max(500)
+        private int maxRequestSize = 500;
     }
 }

@@ -102,6 +102,9 @@ inventory:
     safety-stock-multiplier: 1.5
     default-safety-stock: 10
     default-max-stock: 1000
+  sync:
+    batch-size: 50
+    max-request-size: 500
 
 # Messaging Configuration (disabled by default)
 messaging:

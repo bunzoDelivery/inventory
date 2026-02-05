@@ -25,6 +25,12 @@ public interface ProductRepository extends R2dbcRepository<Product, Long> {
     Mono<Product> findBySlug(String slug);
 
     /**
+     * Find products by multiple SKUs (useful for bulk operations)
+     */
+    @Query("SELECT * FROM products WHERE sku IN (:skus)")
+    Flux<Product> findBySkuIn(java.util.List<String> skus);
+
+    /**
      * Find products by category ID
      */
     @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name")
