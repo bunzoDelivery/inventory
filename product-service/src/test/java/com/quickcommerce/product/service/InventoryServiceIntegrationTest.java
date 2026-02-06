@@ -53,7 +53,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         ReserveStockRequest request = ReserveStockRequest.builder()
                 .sku("SKU001")
                 .quantity(10)
-                .customerId("123")
+                .customerId(123L)
                 .orderId("ORDER123")
                 .build();
 
@@ -80,7 +80,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         ReserveStockRequest request = ReserveStockRequest.builder()
                 .sku("SKU001")
                 .quantity(150)
-                .customerId("123")
+                .customerId(123L)
                 .orderId("ORDER123")
                 .build();
 
@@ -119,7 +119,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
                     ReserveStockRequest req = ReserveStockRequest.builder()
                             .sku("SKU_CONC")
                             .quantity(1)
-                            .customerId(String.valueOf(i))
+                            .customerId((long) i)
                             .orderId("ORDER_" + i)
                             .build();
 
@@ -142,7 +142,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         ReserveStockRequest reserveRequest = ReserveStockRequest.builder()
                 .sku("SKU001")
                 .quantity(10)
-                .customerId("123")
+                .customerId(123L)
                 .orderId("ORDER123")
                 .build();
 

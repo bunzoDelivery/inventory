@@ -176,11 +176,27 @@ public class ProductSyncService {
         product.setTags(item.getTags());
         product.setIsActive(item.getIsActive());
         product.setIsAvailable(item.getIsAvailable());
-        product.setSlug(item.getSlug());
+        // Auto-generate slug if not provided
+        product.setSlug(item.getSlug() != null ? item.getSlug() : generateSlug(item.getName(), item.getSku()));
         product.setNutritionalInfo(item.getNutritionalInfo());
         product.setWeightGrams(item.getWeightGrams());
         product.setBarcode(item.getBarcode());
         return product;
+    }
+    
+    /**
+     * Generate URL-friendly slug from product name and SKU
+     */
+    private String generateSlug(String name, String sku) {
+        // Convert to lowercase, replace spaces and special chars with hyphens
+        String slug = name.toLowerCase()
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .replaceAll("\\s+", "-")
+                .replaceAll("-+", "-")
+                .trim();
+        
+        // Append SKU to ensure uniqueness
+        return slug + "-" + sku.toLowerCase();
     }
     
     /**
@@ -217,7 +233,8 @@ public class ProductSyncService {
         product.setTags(item.getTags());
         product.setIsActive(item.getIsActive());
         product.setIsAvailable(item.getIsAvailable());
-        product.setSlug(item.getSlug());
+        // Auto-generate slug if not provided
+        product.setSlug(item.getSlug() != null ? item.getSlug() : generateSlug(item.getName(), item.getSku()));
         product.setNutritionalInfo(item.getNutritionalInfo());
         product.setWeightGrams(item.getWeightGrams());
         product.setBarcode(item.getBarcode());

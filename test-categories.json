@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Dairy",
+    "slug": "dairy",
+    "description": "Milk, butter, cheese and dairy products",
+    "isActive": true,
+    "displayOrder": 1
+  },
+  {
+    "name": "Bakery",
+    "slug": "bakery",
+    "description": "Bread, buns and bakery items",
+    "isActive": true,
+    "displayOrder": 2
+  },
+  {
+    "name": "Snacks",
+    "slug": "snacks",
+    "description": "Chips, namkeen and snacks",
+    "isActive": true,
+    "displayOrder": 3
+  },
+  {
+    "name": "Beverages",
+    "slug": "beverages",
+    "description": "Soft drinks, juices and beverages",
+    "isActive": true,
+    "displayOrder": 4
+  },
+  {
+    "name": "Household",
+    "slug": "household",
+    "description": "Cleaning and household items",
+    "isActive": true,
+    "displayOrder": 5
+  },
+  {
+    "name": "Instant Food",
+    "slug": "instant-food",
+    "description": "Noodles, pasta and instant food",
+    "isActive": true,
+    "displayOrder": 6
+  },
+  {
+    "name": "Personal Care",
+    "slug": "personal-care",
+    "description": "Toiletries and personal care products",
+    "isActive": true,
+    "displayOrder": 7
+  },
+  {
+    "name": "Cooking Essentials",
+    "slug": "cooking-essentials",
+    "description": "Oil, spices and cooking essentials",
+    "isActive": true,
+    "displayOrder": 8
+  },
+  {
+    "name": "Biscuits",
+    "slug": "biscuits",
+    "description": "Biscuits and cookies",
+    "isActive": true,
+    "displayOrder": 9
+  }
+]

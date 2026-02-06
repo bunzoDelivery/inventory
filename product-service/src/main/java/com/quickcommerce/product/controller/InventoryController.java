@@ -23,6 +23,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST controller for inventory management operations
@@ -70,10 +71,15 @@ public class InventoryController {
      * Confirm reservation (convert to sale)
      */
     @PostMapping("/reservations/{reservationId}/confirm")
-    public Mono<Void> confirmReservation(@PathVariable String reservationId) {
+    public Mono<ResponseEntity<Map<String, String>>> confirmReservation(@PathVariable String reservationId) {
         log.info("Confirming reservation: {}", reservationId);
 
         return inventoryService.confirmReservation(reservationId)
+                .then(Mono.just(ResponseEntity.ok(Map.of(
+                    "reservationId", reservationId,
+                    "status", "CONFIRMED",
+                    "message", "Reservation confirmed successfully"
+                ))))
                 .doOnSuccess(result -> log.info("Reservation confirmed successfully: {}", reservationId))
                 .doOnError(error -> log.error("Failed to confirm reservation: {}", reservationId, error));
     }
@@ -82,10 +88,15 @@ public class InventoryController {
      * Cancel reservation
      */
     @PostMapping("/reservations/{reservationId}/cancel")
-    public Mono<Void> cancelReservation(@PathVariable String reservationId) {
+    public Mono<ResponseEntity<Map<String, String>>> cancelReservation(@PathVariable String reservationId) {
         log.info("Cancelling reservation: {}", reservationId);
 
         return inventoryService.cancelReservation(reservationId)
+                .then(Mono.just(ResponseEntity.ok(Map.of(
+                    "reservationId", reservationId,
+                    "status", "CANCELLED",
+                    "message", "Reservation cancelled successfully"
+                ))))
                 .doOnSuccess(result -> log.info("Reservation cancelled successfully: {}", reservationId))
                 .doOnError(error -> log.error("Failed to cancel reservation: {}", reservationId, error));
     }
@@ -178,6 +189,37 @@ public class InventoryController {
                 .map(ResponseEntity::ok)
                 .doOnNext(response -> log.info("Single availability check completed for store {} and SKU {}", storeId,
                         sku));
+    }
+
+    /**
+     * Get all store IDs where a product is available
+     * Used by search service for indexing
+     */
+    @GetMapping("/product/{productId}/stores")
+    public Mono<ResponseEntity<List<Long>>> getStoresForProduct(@PathVariable Long productId) {
+        log.info("Getting stores for product: {}", productId);
+        
+        return inventoryService.getStoresForProduct(productId)
+                .collectList()
+                .map(ResponseEntity::ok)
+                .doOnNext(response -> log.info("Found {} stores for product {}", 
+                    response.getBody().size(), productId));
+    }
+
+    /**
+     * Get store IDs for multiple products (bulk)
+     * Returns map of productId -> List<storeId>
+     * Used by search service for efficient bulk indexing
+     */
+    @PostMapping("/products/stores")
+    public Mono<ResponseEntity<Map<Long, List<Long>>>> getStoresForProducts(
+            @RequestBody List<Long> productIds) {
+        log.info("Getting stores for {} products", productIds.size());
+        
+        return inventoryService.getStoresForProducts(productIds)
+                .map(ResponseEntity::ok)
+                .doOnNext(response -> log.info("Returned store mappings for {} products", 
+                    response.getBody().size()));
     }
 
     /**

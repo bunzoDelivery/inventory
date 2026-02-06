@@ -44,6 +44,7 @@ public class MeilisearchProvider {
      */
     /**
      * Search for products using query, filters, and pagination
+     * Optimized with attributesToRetrieve for reduced payload size
      */
     public Mono<SearchResult> search(String query, Long storeId, int page, int pageSize) {
         return Mono.fromCallable(() -> {
@@ -56,6 +57,10 @@ public class MeilisearchProvider {
                     .offset(offset)
                     .limit(pageSize)
                     .filter(new String[] { buildFilter(storeId) })
+                    .attributesToRetrieve(new String[] {
+                        "id", "name", "brand", "categoryName", "unitText", 
+                        "price", "imageUrl", "productUrl", "isActive"
+                    })
                     .build();
 
             log.debug("Executing search: '{}', storeId: {}, page: {}, size: {}, offset: {}",

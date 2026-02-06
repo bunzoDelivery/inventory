@@ -1,45 +1,46 @@
 package com.quickcommerce.search.entity;
 
-import com.quickcommerce.search.entity.converter.JsonAttributeConverter;
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
-@Entity
-@Table(name = "search_synonyms")
+/**
+ * R2DBC entity for search synonyms
+ * Stores synonym mappings for search query expansion
+ */
+@Table("search_synonyms")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class SearchSynonym {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column("term")
     private String term;
 
-    @Convert(converter = JsonAttributeConverter.class)
-    @Column(columnDefinition = "JSON", nullable = false)
-    private List<String> synonyms;
+    /**
+     * JSON string containing array of synonyms
+     * Converted to/from List<String> in service layer
+     */
+    @Column("synonyms")
+    private String synonymsJson;
 
-    @Column(name = "is_active")
+    @Column("is_active")
     @Builder.Default
-    private boolean isActive = true;
+    private Boolean isActive = true;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
+    @Column("updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "updated_by")
+    @Column("updated_by")
     private String updatedBy;
 }

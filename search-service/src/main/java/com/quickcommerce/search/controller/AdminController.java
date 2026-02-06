@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -12,12 +13,13 @@ import java.util.Map;
 
 /**
  * Admin controller for index management operations
- * Only available in dev/non-production environments
+ * Requires ADMIN role for all operations
  */
 @Slf4j
 @RestController
 @RequestMapping("/admin/search")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final MeilisearchProvider meilisearchProvider;

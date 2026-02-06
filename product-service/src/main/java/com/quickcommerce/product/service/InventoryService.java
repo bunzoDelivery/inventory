@@ -35,6 +35,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -50,6 +51,7 @@ public class InventoryService {
         private final StockMovementRepository stockMovementRepository;
         private final StockReservationRepository stockReservationRepository;
         private final StoreRepository storeRepository;
+        private final com.quickcommerce.product.catalog.repository.ProductRepository productRepository;
         private final ApplicationEventPublisher eventPublisher;
         private final TransactionalOperator transactionalOperator;
         private final InventoryProperties inventoryProperties;
@@ -185,33 +187,46 @@ public class InventoryService {
                                                                         StockMovement.ReferenceType.PURCHASE,
                                                                         request.getReferenceId(),
                                                                         request.getReason()))
-                                                        .then(evictInventoryCache(item.getSku()));
+                                                        .then(evictInventoryCache(item.getSku()))
+                                                        .thenReturn(item); // Return item to prevent switchIfEmpty
                                 })
                                 .switchIfEmpty(Mono.defer(() -> {
                                         // Item doesn't exist - create new inventory item
                                         log.info("Creating new inventory item for SKU: {} at store: {}",
                                                         request.getSku(), request.getStoreId());
 
-                                        InventoryItem newItem = InventoryItem.builder()
-                                                        .sku(request.getSku())
-                                                        .productId(request.getProductId())
-                                                        .storeId(request.getStoreId())
-                                                        .currentStock(request.getQuantity())
-                                                        .reservedStock(0)
-                                                        .safetyStock(inventoryProperties.getStock().getDefaultSafetyStock())
-                                                        .maxStock(inventoryProperties.getStock().getDefaultMaxStock())
-                                                        .version(0L)
-                                                        .lastUpdated(LocalDateTime.now())
-                                                        .build();
+                                        // If productId not provided, fetch it from products table
+                                        Mono<Long> productIdMono = request.getProductId() != null
+                                                ? Mono.just(request.getProductId())
+                                                : productRepository.findBySku(request.getSku())
+                                                        .map(product -> product.getId())
+                                                        .switchIfEmpty(Mono.error(new InventoryNotFoundException(
+                                                                "Product not found with SKU: " + request.getSku())));
 
-                                        return inventoryItemRepository.save(newItem)
-                                                        .flatMap(savedItem -> createStockMovement(savedItem.getId(),
-                                                                        request.getQuantity(),
-                                                                        StockMovement.MovementType.INBOUND,
-                                                                        StockMovement.ReferenceType.PURCHASE,
-                                                                        request.getReferenceId(),
-                                                                        "Initial stock for new item"));
-                                }));
+                                        return productIdMono.flatMap(productId -> {
+                                                InventoryItem newItem = InventoryItem.builder()
+                                                                .sku(request.getSku())
+                                                                .productId(productId)
+                                                                .storeId(request.getStoreId())
+                                                                .currentStock(request.getQuantity())
+                                                                .reservedStock(0)
+                                                                .safetyStock(inventoryProperties.getStock().getDefaultSafetyStock())
+                                                                .maxStock(inventoryProperties.getStock().getDefaultMaxStock())
+                                                                // Don't set version - let R2DBC handle it
+                                                                .lastUpdated(LocalDateTime.now())
+                                                                .build();
+
+                                                return inventoryItemRepository.save(newItem)
+                                                                .flatMap(savedItem -> createStockMovement(savedItem.getId(),
+                                                                                request.getQuantity(),
+                                                                                StockMovement.MovementType.INBOUND,
+                                                                                StockMovement.ReferenceType.PURCHASE,
+                                                                                request.getReferenceId(),
+                                                                                "Initial stock for new item")
+                                                                        .thenReturn(savedItem));
+                                        });
+                                }))
+                                .then(); // Convert back to Mono<Void>
         }
 
         /**
@@ -282,7 +297,7 @@ public class InventoryService {
                                 .reservationId(reservationId)
                                 .inventoryItemId(item.getId())
                                 .quantity(request.getQuantity())
-                                .customerId(Long.valueOf(request.getCustomerId()))
+                                .customerId(request.getCustomerId())
                                 .orderId(request.getOrderId())
                                 .expiresAt(expiresAt)
                                 .status(StockReservation.ReservationStatus.ACTIVE)
@@ -479,5 +494,29 @@ public class InventoryService {
                                                                         response.getInventoryAvailability()
                                                                                         .getProducts().size()));
                                 });
+        }
+
+        /**
+         * Get all stores where a product is available
+         * Used by search service for product indexing
+         */
+        public Flux<Long> getStoresForProduct(Long productId) {
+                return inventoryItemRepository.findByProductId(productId)
+                                .map(InventoryItem::getStoreId)
+                                .distinct();
+        }
+
+        /**
+         * Get stores for multiple products (bulk operation)
+         * Returns map of productId -> List<storeId>
+         */
+        public Mono<Map<Long, List<Long>>> getStoresForProducts(List<Long> productIds) {
+                return Flux.fromIterable(productIds)
+                                .flatMap(productId -> 
+                                        getStoresForProduct(productId)
+                                                .collectList()
+                                                .map(stores -> Map.entry(productId, stores))
+                                )
+                                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
         }
 }

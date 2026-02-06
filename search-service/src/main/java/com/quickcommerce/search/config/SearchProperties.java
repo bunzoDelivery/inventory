@@ -28,4 +28,37 @@ public class SearchProperties {
      * Maximum allowed result limit
      */
     private int maxResultLimit = 100;
+
+    /**
+     * Sync configuration
+     */
+    private Sync sync = new Sync();
+
+    @Data
+    public static class Sync {
+        /**
+         * Enable automatic sync on startup
+         */
+        private boolean enableOnStartup = true;
+
+        /**
+         * Batch size for syncing products
+         */
+        private int batchSize = 500;
+
+        /**
+         * Max retry attempts for sync operations
+         */
+        private int maxRetries = 3;
+
+        /**
+         * Initial delay for retry in milliseconds
+         */
+        private long retryDelayMs = 1000;
+
+        /**
+         * Maximum delay for retry in milliseconds
+         */
+        private long maxRetryDelayMs = 10000;
+    }
 }

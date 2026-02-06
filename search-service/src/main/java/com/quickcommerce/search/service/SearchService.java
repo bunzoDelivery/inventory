@@ -7,6 +7,7 @@ import com.quickcommerce.search.config.SearchProperties;
 import com.quickcommerce.search.dto.ProductResult;
 import com.quickcommerce.search.dto.SearchRequest;
 import com.quickcommerce.search.dto.SearchResponse;
+import com.quickcommerce.search.metrics.SearchMetrics;
 import com.quickcommerce.search.model.ProductDocument;
 import com.quickcommerce.search.provider.MeilisearchProvider;
 import lombok.RequiredArgsConstructor;
@@ -16,12 +17,13 @@ import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Main search orchestration service
+ * Main search orchestration service with metrics tracking
  * Coordinates search flow: query → Meilisearch → filter → rank → response
  */
 @Slf4j
@@ -35,22 +37,22 @@ public class SearchService {
     private final SearchProperties searchProperties;
     private final ObjectMapper objectMapper;
     private final InventoryClient inventoryClient;
+    private final SearchMetrics searchMetrics;
 
     /**
-     * Execute product search
+     * Execute product search with metrics tracking
      */
     public Mono<SearchResponse> search(SearchRequest request) {
+        // Increment search request counter
+        searchMetrics.incrementSearchRequests();
+        
         return Mono.defer(() -> { // Defer for fresh context
             String normalizedQuery = normalizeQuery(request.getQuery());
 
-            // Handle pagination (backward compatibility for limit)
+            // Handle pagination with standard page/pageSize
             int page = request.getPage() != null ? request.getPage() : 1;
-            int pageSize = request.getPageSize() != null ? request.getPageSize() : 20;
-
-            // If legacy 'limit' is set and 'pageSize' is default, use 'limit'
-            if (request.getLimit() != null && request.getPageSize() == 20 && request.getLimit() != 20) {
-                pageSize = request.getLimit();
-            }
+            int pageSize = request.getPageSize() != null ? request.getPageSize() : 
+                searchProperties.getDefaultResultLimit();
 
             log.info("Executing search: query='{}', storeId={}, page={}, size={}",
                     request.getQuery(), request.getStoreId(), page, pageSize);
@@ -111,6 +113,15 @@ public class SearchService {
                         log.info("Search completed in {}ms, hits: {}, returned: {}",
                                 timeMs, totalHits, results.size());
 
+                        // Record metrics
+                        searchMetrics.recordSearchDuration(timeMs);
+                        searchMetrics.recordSearchResults(results.size());
+                        searchMetrics.recordSearchByStore(request.getStoreId(), results.size());
+                        
+                        if (results.isEmpty()) {
+                            searchMetrics.incrementNoResults();
+                        }
+
                         return SearchResponse.builder()
                                 .query(request.getQuery())
                                 .storeId(request.getStoreId())
@@ -125,6 +136,10 @@ public class SearchService {
                                         .returned(results.size())
                                         .build())
                                 .build();
+                    })
+                    .doOnError(e -> {
+                        log.error("Search failed", e);
+                        searchMetrics.incrementSearchErrors(e.getClass().getSimpleName());
                     });
         });
     }
@@ -151,8 +166,8 @@ public class SearchService {
 
     /**
      * Filter products by stock availability using InventoryClient
-     * Implements "Smart Fallback" to Meilisearch index data if Inventory Service
-     * fails
+     * Implements "Smart Fallback" to Meilisearch index data if Inventory Service fails
+     * Optimized with batching for large result sets
      */
     private Mono<List<ProductDocument>> filterByStock(List<ProductDocument> products, Long storeId) {
         if (products.isEmpty()) {
@@ -161,7 +176,28 @@ public class SearchService {
 
         List<Long> productIds = products.stream()
                 .map(ProductDocument::getId)
+                .distinct()
                 .collect(Collectors.toList());
+
+        // Smart batching: if more than 50 products, check in smaller batches
+        if (productIds.size() > 50) {
+            log.debug("Large product set ({}), using batched availability check", productIds.size());
+            return reactor.core.publisher.Flux.fromIterable(productIds)
+                .buffer(50)
+                .flatMap(batch -> inventoryClient.checkAvailability(storeId, batch))
+                .collectList()
+                .map(responses -> {
+                    Map<Long, Boolean> combinedAvailability = new HashMap<>();
+                    for (var response : responses) {
+                        if (response.getAvailability() != null) {
+                            combinedAvailability.putAll(response.getAvailability());
+                        }
+                    }
+                    return products.stream()
+                        .filter(product -> Boolean.TRUE.equals(combinedAvailability.get(product.getId())))
+                        .collect(Collectors.toList());
+                });
+        }
 
         return inventoryClient.checkAvailability(storeId, productIds)
                 .map(response -> {

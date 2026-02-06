@@ -1,12 +1,14 @@
 package com.quickcommerce.search.repository;
 
 import com.quickcommerce.search.entity.SearchSetting;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Mono;
 
-import java.util.Optional;
-
+/**
+ * R2DBC reactive repository for search settings
+ */
 @Repository
-public interface SearchSettingRepository extends JpaRepository<SearchSetting, String> {
-    Optional<SearchSetting> findByKey(String key);
+public interface SearchSettingRepository extends ReactiveCrudRepository<SearchSetting, String> {
+    Mono<SearchSetting> findByKey(String key);
 }

@@ -1,0 +1,115 @@
+{
+  "storeId": 1,
+  "items": [
+    {
+      "sku": "AMUL-MILK-500ML",
+      "name": "Amul Taaza Milk 500ml",
+      "brand": "Amul",
+      "categoryId": 1,
+      "basePrice": 25.0,
+      "unitOfMeasure": "500ml",
+      "currentStock": 100,
+      "safetyStock": 20,
+      "maxStock": 500
+    },
+    {
+      "sku": "AMUL-BUTTER-100G",
+      "name": "Amul Butter 100g",
+      "brand": "Amul",
+      "categoryId": 1,
+      "basePrice": 50.0,
+      "unitOfMeasure": "100g",
+      "currentStock": 50,
+      "safetyStock": 10,
+      "maxStock": 200
+    },
+    {
+      "sku": "BRITANNIA-BREAD",
+      "name": "Britannia Bread 400g",
+      "brand": "Britannia",
+      "categoryId": 2,
+      "basePrice": 35.0,
+      "unitOfMeasure": "400g",
+      "currentStock": 75,
+      "safetyStock": 15,
+      "maxStock": 300
+    },
+    {
+      "sku": "LAYS-CHIPS-50G",
+      "name": "Lays Classic Chips 50g",
+      "brand": "Lays",
+      "categoryId": 3,
+      "basePrice": 20.0,
+      "unitOfMeasure": "50g",
+      "currentStock": 200,
+      "safetyStock": 30,
+      "maxStock": 500
+    },
+    {
+      "sku": "COCA-COLA-750ML",
+      "name": "Coca Cola 750ml",
+      "brand": "Coca Cola",
+      "categoryId": 4,
+      "basePrice": 40.0,
+      "unitOfMeasure": "750ml",
+      "currentStock": 150,
+      "safetyStock": 25,
+      "maxStock": 400
+    },
+    {
+      "sku": "SURF-EXCEL-1KG",
+      "name": "Surf Excel Detergent 1kg",
+      "brand": "Surf Excel",
+      "categoryId": 5,
+      "basePrice": 180.0,
+      "unitOfMeasure": "1kg",
+      "currentStock": 30,
+      "safetyStock": 5,
+      "maxStock": 100
+    },
+    {
+      "sku": "MAGGI-NOODLES-70G",
+      "name": "Maggi Masala Noodles 70g",
+      "brand": "Maggi",
+      "categoryId": 6,
+      "basePrice": 12.0,
+      "unitOfMeasure": "70g",
+      "currentStock": 300,
+      "safetyStock": 50,
+      "maxStock": 800
+    },
+    {
+      "sku": "COLGATE-TOOTHPASTE",
+      "name": "Colgate Total Toothpaste 150g",
+      "brand": "Colgate",
+      "categoryId": 7,
+      "basePrice": 95.0,
+      "unitOfMeasure": "150g",
+      "currentStock": 80,
+      "safetyStock": 15,
+      "maxStock": 250
+    },
+    {
+      "sku": "FORTUNE-OIL-1L",
+      "name": "Fortune Sunflower Oil 1L",
+      "brand": "Fortune",
+      "categoryId": 8,
+      "basePrice": 150.0,
+      "unitOfMeasure": "1L",
+      "currentStock": 60,
+      "safetyStock": 10,
+      "maxStock": 200
+    },
+    {
+      "sku": "PARLE-G-BISCUIT",
+      "name": "Parle-G Biscuits 200g",
+      "brand": "Parle",
+      "categoryId": 9,
+      "basePrice": 15.0,
+      "unitOfMeasure": "200g",
+      "currentStock": 250,
+      "safetyStock": 40,
+      "maxStock": 600
+    }
+  ]
+}

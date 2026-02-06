@@ -1,44 +1,48 @@
 package com.quickcommerce.search.entity;
 
-import com.quickcommerce.search.entity.converter.JsonAttributeConverter;
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "search_settings")
+/**
+ * R2DBC entity for search settings
+ * Stores Meilisearch configuration as JSON
+ */
+@Table("search_settings")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class SearchSetting {
 
     @Id
-    @Column(name = "setting_key", nullable = false, unique = true)
+    @Column("setting_key")
     private String key;
 
-    @Convert(converter = JsonAttributeConverter.class)
-    @Column(name = "setting_value", columnDefinition = "JSON", nullable = false)
-    private Object value;
+    /**
+     * JSON string containing setting value
+     * Parsed to appropriate type in service layer
+     */
+    @Column("setting_value")
+    private String valueJson;
 
-    @Column(name = "description")
+    @Column("description")
     private String description;
 
     @Version
+    @Column("version")
     private Integer version;
 
-    @LastModifiedDate
-    @Column(name = "updated_at")
+    @Column("updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "updated_by")
+    @Column("updated_by")
     private String updatedBy;
 }

@@ -1,7 +1,10 @@
 package com.quickcommerce.search.client;
 
 import com.quickcommerce.search.model.ProductDocument;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -14,7 +17,7 @@ import java.util.List;
 
 /**
  * Real implementation of CatalogClient using WebClient
- * Calls actual Catalog Service API
+ * Calls actual Catalog Service API with circuit breaker protection
  */
 @Slf4j
 @Component
@@ -23,12 +26,15 @@ public class CatalogClientImpl implements CatalogClient {
         private final WebClient webClient;
         private final Duration timeout;
         private final String catalogServiceUrl;
+        private final CircuitBreaker circuitBreaker;
 
         public CatalogClientImpl(WebClient.Builder webClientBuilder,
                         @Value("${clients.catalog.url}") String catalogServiceUrl,
-                        @Value("${clients.catalog.timeout:300ms}") Duration timeout) {
+                        @Value("${clients.catalog.timeout:300ms}") Duration timeout,
+                        @Qualifier("catalogCircuitBreaker") CircuitBreaker circuitBreaker) {
                 this.catalogServiceUrl = catalogServiceUrl;
                 this.timeout = timeout;
+                this.circuitBreaker = circuitBreaker;
                 this.webClient = webClientBuilder
                                 .baseUrl(catalogServiceUrl)
                                 .build();
@@ -36,8 +42,8 @@ public class CatalogClientImpl implements CatalogClient {
 
         @Override
         public Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit) {
-                log.debug("Getting {} bestsellers for store {} from {}",
-                                limit, storeId, catalogServiceUrl);
+                log.debug("Getting {} bestsellers for store {} from {} (CB: {})",
+                                limit, storeId, catalogServiceUrl, circuitBreaker.getState());
 
                 return webClient
                                 .get()
@@ -50,10 +56,12 @@ public class CatalogClientImpl implements CatalogClient {
                                 .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
                                 })
                                 .timeout(timeout)
+                                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                                 .doOnSuccess(products -> log.debug("Received {} bestseller products",
                                                 products != null ? products.size() : 0))
                                 .onErrorResume(e -> {
-                                        log.error("Error calling catalog service for bestsellers", e);
+                                        log.error("Error calling catalog service for bestsellers (CB: {}): {}", 
+                                                circuitBreaker.getState(), e.getMessage());
                                         return Mono.just(new ArrayList<>());
                                 })
                                 .map(products -> products != null ? products : new ArrayList<>());
@@ -61,8 +69,8 @@ public class CatalogClientImpl implements CatalogClient {
 
         @Override
         public Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit) {
-                log.debug("Getting {} products from category {} from {}",
-                                limit, categoryId, catalogServiceUrl);
+                log.debug("Getting {} products from category {} from {} (CB: {})",
+                                limit, categoryId, catalogServiceUrl, circuitBreaker.getState());
 
                 return webClient
                                 .get()
@@ -74,11 +82,13 @@ public class CatalogClientImpl implements CatalogClient {
                                 .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
                                 })
                                 .timeout(timeout)
+                                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                                 .doOnSuccess(
                                                 products -> log.debug("Received {} category products",
                                                                 products != null ? products.size() : 0))
                                 .onErrorResume(e -> {
-                                        log.error("Error calling catalog service for category products", e);
+                                        log.error("Error calling catalog service for category products (CB: {}): {}", 
+                                                circuitBreaker.getState(), e.getMessage());
                                         return Mono.just(new ArrayList<>());
                                 })
                                 .map(products -> products != null ? products : new ArrayList<>());
@@ -86,19 +96,18 @@ public class CatalogClientImpl implements CatalogClient {
 
         @Override
         public reactor.core.publisher.Flux<ProductDocument> getAllProducts() {
-                log.info("Fetching all products from available catalog: {}", catalogServiceUrl);
+                log.info("Fetching all products from available catalog: {} (CB: {})", 
+                        catalogServiceUrl, circuitBreaker.getState());
                 return webClient
                                 .get()
-                                .uri("/api/v1/catalog/products/all") // Updated to point to new endpoint
-                                // MVP: Simplified to a single large fetch or JSON stream
-                                // Real world: Pagination required. For MVP, assuming a specific "stream" or
-                                // "all" endpoint.
-                                // Let's assume /catalog/products returns a list, we will convert to Flux
+                                .uri("/api/v1/catalog/products/all")
                                 .retrieve()
                                 .bodyToFlux(ProductDocument.class)
-                                .timeout(Duration.ofSeconds(60)) // Longer timeout for bulk fetch
+                                .timeout(Duration.ofSeconds(60))
+                                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                                 .onErrorResume(e -> {
-                                        log.error("Error fetching all products from catalog", e);
+                                        log.error("Error fetching all products from catalog (CB: {}): {}", 
+                                                circuitBreaker.getState(), e.getMessage());
                                         return reactor.core.publisher.Flux.empty();
                                 });
         }

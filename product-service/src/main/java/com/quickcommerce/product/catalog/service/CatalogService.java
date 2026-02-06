@@ -34,7 +34,7 @@ public class CatalogService {
      * Create a new category
      */
     @Transactional
-    @CacheEvict(value = "categories:all", allEntries = true)
+    // @CacheEvict(value = "categories:all", allEntries = true) // Disabled for MVP
     public Mono<CategoryResponse> createCategory(CreateCategoryRequest request) {
         log.info("Creating category: {}", request.getName());
 
@@ -95,9 +95,9 @@ public class CatalogService {
     }
 
     /**
-     * Get all active categories (cached for 10 minutes)
+     * Get all active categories
      */
-    @Cacheable(value = "categories:all")
+    // @Cacheable(value = "categories:all") // Disabled for MVP
     public Flux<CategoryResponse> getAllActiveCategories() {
         return categoryRepository.findAllActive()
                 .map(CategoryResponse::fromDomain);
@@ -163,9 +163,9 @@ public class CatalogService {
     }
 
     /**
-     * Get product by SKU (cached for 5 minutes)
+     * Get product by SKU
      */
-    @Cacheable(value = "products", key = "'sku:' + #sku")
+    // @Cacheable(value = "products", key = "'sku:' + #sku") // Disabled for MVP
     public Mono<ProductResponse> getProductBySku(String sku) {
         return productRepository.findBySku(sku)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Product", sku)))

@@ -56,17 +56,22 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- RabbitMQ - DISABLED for MVP -->
+        <!--
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
             <optional>true</optional>
         </dependency>
+        -->
 
-        <!-- Redis for Caching -->
+        <!-- Redis for Caching - DISABLED for MVP -->
+        <!--
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
         </dependency>
+        -->
 
         <!-- Resilience4j for Circuit Breaker and Rate Limiting -->
         <dependency>

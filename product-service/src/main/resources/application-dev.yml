@@ -14,12 +14,9 @@ spring:
     user: root
     password: root
 
-  # Dev Redis (local)
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password:
+  # Cache disabled for MVP
+  cache:
+    type: none
 
 # Development Logging (verbose)
 logging:

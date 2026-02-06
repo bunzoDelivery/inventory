@@ -24,8 +24,8 @@ public class ReserveStockRequest {
     @Positive(message = "Quantity must be positive")
     private Integer quantity;
 
-    @NotBlank(message = "Customer ID is required")
-    private String customerId;
+    @NotNull(message = "Customer ID is required")
+    private Long customerId;
 
     @NotBlank(message = "Order ID is required")
     private String orderId;

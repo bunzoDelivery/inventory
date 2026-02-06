@@ -1,17 +1,15 @@
 spring:
   application:
     name: search-service
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/inventory?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
+  r2dbc:
+    url: ${DB_URL:r2dbc:mysql://localhost:3306/inventory}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+    pool:
+      initial-size: 10
+      max-size: 30
+      max-idle-time: 30m
+      max-acquire-time: 3s
 server:
   port: 8083
 
@@ -36,16 +34,28 @@ search:
   candidateLimit: 80
   defaultResultLimit: 20
   maxResultLimit: 100
+  sync:
+    enable-on-startup: true
+    batch-size: 500
+    max-retries: 3
+    retry-delay-ms: 1000
+    max-retry-delay-ms: 10000
 
 # Management and Actuator
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
 
 # Logging
 logging:

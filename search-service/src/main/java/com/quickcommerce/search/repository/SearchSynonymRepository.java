@@ -1,15 +1,17 @@
 package com.quickcommerce.search.repository;
 
 import com.quickcommerce.search.entity.SearchSynonym;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
-
+/**
+ * R2DBC reactive repository for search synonyms
+ */
 @Repository
-public interface SearchSynonymRepository extends JpaRepository<SearchSynonym, Long> {
-    Optional<SearchSynonym> findByTerm(String term);
+public interface SearchSynonymRepository extends ReactiveCrudRepository<SearchSynonym, Long> {
+    Mono<SearchSynonym> findByTerm(String term);
 
-    List<SearchSynonym> findAllByIsActiveTrue();
+    Flux<SearchSynonym> findAllByIsActiveTrue();
 }
