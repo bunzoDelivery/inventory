@@ -23,6 +23,7 @@
         <module>common</module>
         <module>product-service</module>
         <module>search-service</module>
+        <module>order-service</module>
     </modules>
 
     <properties>

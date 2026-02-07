@@ -1,0 +1,2 @@
+-- Placeholder for future test data if needed.
+-- Currently no initial data required for Orders.

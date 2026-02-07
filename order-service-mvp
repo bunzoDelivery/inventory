@@ -1,0 +1,279 @@
+Here is the **Final Design Specification** for your Order Service MVP. This design incorporates the client-side cart, the mock payment/COD logic, and a "Placeholder" architecture for the future Notification Service.
+
+### 1. High-Level Architecture
+Your Order Service sits in the middle. It trusts no one (verifies prices) and orchestrates the transaction.
+
+*   **Inbound:** Mobile App (User)
+*   **Outbound (Synchronous):** Catalog Service (Price Check), Inventory Service (Stock Check/Reserve).
+*   **Outbound (Future/Placeholder):** Notification Service (Fire & Forget).
+
+---
+
+### 2. Database Schema (MySQL / R2DBC)
+
+We need strict tracking of **Order Status** (Logistic flow) vs **Payment Status** (Money flow).
+
+```sql
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_uuid VARCHAR(36) UNIQUE NOT NULL, -- Public ID
+    customer_id VARCHAR(50) NOT NULL,
+    store_id VARCHAR(50) NOT NULL,
+    
+    -- Logistic Status: PENDING_PAYMENT, CONFIRMED, PACKING, DELIVERED, CANCELLED
+    status VARCHAR(20) NOT NULL,
+    
+    -- Payment Details
+    payment_method VARCHAR(20) NOT NULL,    -- 'COD', 'AIRTEL_MONEY', 'MTN_MONEY'
+    payment_status VARCHAR(20) NOT NULL,    -- 'PENDING', 'PAID', 'COD_PENDING'
+    
+    total_amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'ZMW',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    sku VARCHAR(50) NOT NULL,
+    qty INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL, -- Snapshot of price at purchase
+    sub_total DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+);
+```
+
+---
+
+### 3. The "Future-Proof" Notification Pattern
+
+To ensure you can plug in the Notification Service later without rewriting the Order Service, we use an **Interface**.
+
+**`NotificationClient.java` (Interface)**
+```java
+public interface NotificationClient {
+    // Fire and forget
+    Mono<Void> sendOrderConfirmedEvent(Order order);
+}
+```
+
+**`NoOpNotificationClient.java` (Current MVP Implementation)**
+```java
+@Component
+public class NoOpNotificationClient implements NotificationClient {
+    private static final Logger log = LoggerFactory.getLogger(NoOpNotificationClient.class);
+
+    @Override
+    public Mono<Void> sendOrderConfirmedEvent(Order order) {
+        // DO NOTHING (Just log it)
+        log.info("stub: Would have sent notification for Order #{}", order.getOrderUuid());
+        return Mono.empty();
+    }
+}
+```
+
+*Later, when you build the Notification Service, you just create `HttpNotificationClient` implementing the interface and delete the `NoOp` version.*
+
+---
+
+### 4. The Business Logic (OrderService.java)
+
+This is the core engine handling the "Fork" between COD and Digital Payment.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepo;
+    private final OrderItemRepository orderItemRepo;
+    private final CatalogWebClient catalogClient;
+    private final InventoryWebClient inventoryClient;
+    private final NotificationClient notificationClient; // Injected (currently NoOp)
+
+    @Transactional
+    public Mono<OrderResponse> createOrder(CreateOrderRequest req) {
+        
+        // 1. Security: Get Real Prices from Catalog
+        return catalogClient.getPrices(req.items())
+            .flatMap(prices -> {
+                
+                // 2. Calculate Totals
+                BigDecimal total = calculateTotal(req.items(), prices);
+
+                // 3. Build Order Object
+                Order order = new Order();
+                order.setOrderUuid(UUID.randomUUID().toString());
+                order.setStoreId(req.storeId());
+                order.setCustomerId(req.customerId());
+                order.setTotalAmount(total);
+                order.setPaymentMethod(req.paymentMethod());
+
+                // --- THE LOGIC FORK ---
+                boolean isCod = "COD".equals(req.paymentMethod());
+                
+                if (isCod) {
+                    order.setStatus("CONFIRMED");         // Ready for picking
+                    order.setPaymentStatus("COD_PENDING"); // Driver collects cash
+                } else {
+                    order.setStatus("PENDING_PAYMENT");   // Wait for Airtel
+                    order.setPaymentStatus("PENDING");
+                }
+
+                // 4. Save to DB
+                return orderRepo.save(order)
+                    .flatMap(savedOrder -> {
+                        
+                        // 5. Interact with Inventory
+                        Mono<Boolean> inventoryAction;
+                        if (isCod) {
+                            // Deduct immediately
+                            inventoryAction = inventoryClient.commitStock(savedOrder.getId(), req.items());
+                        } else {
+                            // Lock temporarily
+                            inventoryAction = inventoryClient.reserveStock(savedOrder.getId(), req.items());
+                        }
+
+                        return inventoryAction.flatMap(success -> {
+                            if (!success) return Mono.error(new RuntimeException("Out of Stock"));
+
+                            // 6. Save Items & Return
+                            return saveItems(savedOrder, req.items(), prices)
+                                .flatMap(response -> {
+                                    // 7. Trigger Notification (Only if COD confirmed immediately)
+                                    if (isCod) {
+                                        // This calls the "NoOp" class for now
+                                        notificationClient.sendOrderConfirmedEvent(savedOrder).subscribe();
+                                    }
+                                    return Mono.just(response);
+                                });
+                        });
+                    });
+            });
+    }
+
+    // The Mock Payment Handler
+    @Transactional
+    public Mono<OrderResponse> mockPayment(String orderUuid) {
+        return orderRepo.findByOrderUuid(orderUuid)
+            .flatMap(order -> {
+                if ("COD".equals(order.getPaymentMethod())) {
+                     return Mono.error(new RuntimeException("COD orders cannot be paid online"));
+                }
+                
+                order.setStatus("CONFIRMED");
+                order.setPaymentStatus("PAID");
+
+                return orderRepo.save(order)
+                    .flatMap(savedOrder -> 
+                        // Commit Stock (Convert Reservation to Deduction)
+                        inventoryClient.commitStock(savedOrder.getId())
+                            .then(Mono.defer(() -> {
+                                // Trigger Notification (Now that it's paid)
+                                notificationClient.sendOrderConfirmedEvent(savedOrder).subscribe();
+                                return Mono.just(mapToResponse(savedOrder));
+                            }))
+                    );
+            });
+    }
+}
+```
+
+---
+
+### 5. API Endpoints Specification
+
+Here is exactly what your Mobile App needs to send.
+
+#### A. Checkout Preview (Pre-check)
+**POST** `/api/v1/orders/preview`
+Used to check if items are in stock and get final price before creating order.
+```json
+{
+  "storeId": "LUSAKA_1",
+  "items": [
+    { "sku": "MLK-500", "qty": 1 }
+  ]
+}
+```
+
+#### B. Create Order (The Commit)
+**POST** `/api/v1/orders`
+```json
+{
+  "storeId": "LUSAKA_1",
+  "customerId": "USER_123",
+  "items": [
+    { "sku": "MLK-500", "qty": 1 }
+  ],
+  "paymentMethod": "COD"  // or "AIRTEL_MONEY"
+}
+```
+
+**Response (COD):**
+```json
+{
+  "orderId": "uuid-string",
+  "status": "CONFIRMED",
+  "message": "Order placed successfully"
+}
+```
+
+**Response (AIRTEL_MONEY):**
+```json
+{
+  "orderId": "uuid-string",
+  "status": "PENDING_PAYMENT",
+  "message": "Please proceed to payment",
+  "totalAmount": 150.00
+}
+```
+
+#### C. Mock Payment (Dev Only)
+**POST** `/api/v1/orders/{orderId}/pay-mock`
+```json
+{
+  "provider": "AIRTEL",
+  "phone": "0977..."
+}
+```
+
+---
+
+### 6. The Cleanup Job (Crucial)
+Since you are using "Reserved" stock for Airtel Money orders, you must handle users who click "Checkout" but never pay.
+
+**`OrderCleanupScheduler.java`**
+```java
+@Component
+public class OrderCleanupScheduler {
+
+    @Scheduled(fixedRate = 60000) // Every minute
+    public void cancelUnpaidOrders() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(5);
+        
+        orderRepo.findExpiredOrders("PENDING_PAYMENT", cutoff)
+            .flatMap(order -> {
+                order.setStatus("CANCELLED");
+                // Release stock in inventory
+                return Mono.when(
+                    orderRepo.save(order),
+                    inventoryClient.releaseStock(order.getId())
+                );
+            })
+            .subscribe();
+    }
+}
+```
+
+### Final Summary of Steps to Build
+1.  **Project Setup:** Spring Boot with WebFlux & R2DBC.
+2.  **Domain:** Create `Order` and `OrderItem` entities.
+3.  **Clients:** Build `WebClient` wrappers for Catalog and Inventory.
+4.  **Interface:** Create the `NotificationClient` interface and the `NoOp` implementation.
+5.  **Service:** Write the `createOrder` logic with the `if (COD)` fork.
+6.  **Controller:** Expose the endpoints.
+7.  **Run:** Start MySQL, Inventory, Catalog, and then Order Service.
+

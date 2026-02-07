@@ -133,35 +133,6 @@ public class IndexSyncService {
     }
 
     /**
-     * Fetch store IDs for multiple products from inventory service
-     * @param productIds List of product IDs
-     * @return Mono of Map<productId, List<storeId>>
-     */
-    private Mono<Map<Long, List<Long>>> fetchStoreIdsForProducts(List<Long> productIds) {
-        if (productIds.isEmpty()) {
-            return Mono.just(Map.of());
-        }
-
-        String productServiceUrl = searchProperties.getCatalog().getProductServiceUrl();
-        WebClient webClient = webClientBuilder.baseUrl(productServiceUrl).build();
-
-        log.debug("Fetching storeIds for {} products from {}", productIds.size(), productServiceUrl);
-
-        return webClient.post()
-            .uri("/api/v1/inventory/products/stores")
-            .bodyValue(productIds)
-            .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<Map<Long, List<Long>>>() {})
-            .timeout(Duration.ofSeconds(30))
-            .doOnSuccess(map -> log.info("Fetched storeIds for {} products", map.size()))
-            .onErrorResume(e -> {
-                log.warn("Failed to fetch storeIds from inventory service: {}. Products will be indexed without storeIds.", 
-                    e.getMessage());
-                return Mono.just(Map.of());
-            });
-    }
-
-    /**
      * Create retry specification with exponential backoff
      */
     private Retry createRetrySpec(String operation) {

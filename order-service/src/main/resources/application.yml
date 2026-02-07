@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: order-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  r2dbc:
+    url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    pool:
+      initial-size: 10
+      max-size: 20
+      max-idle-time: 30m
+      validation-query: SELECT 1
+
+  # Flyway Configuration (JDBC)
+  flyway:
+    enabled: true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    user: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8082}
+  netty:
+    connection-timeout: 30s
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.quickcommerce: INFO
+    org.springframework.r2dbc: INFO
+  file:
+    name: ./logs/order-service.log
+
+# External Services
+client:
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8081}
+  inventory-service:
+    url: ${INVENTORY_SERVICE_URL:http://localhost:8081}
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      product-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+  retry:
+    instances:
+      product-service:
+        max-attempts: 3
+        wait-duration: 500ms
