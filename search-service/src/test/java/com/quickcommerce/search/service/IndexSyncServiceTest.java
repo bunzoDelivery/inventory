@@ -1,6 +1,7 @@
 package com.quickcommerce.search.service;
 
 import com.quickcommerce.search.client.CatalogClient;
+import com.quickcommerce.search.client.InventoryClient;
 import com.quickcommerce.search.model.ProductDocument;
 import com.quickcommerce.search.provider.MeilisearchProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
@@ -23,6 +25,9 @@ class IndexSyncServiceTest {
 
     @Mock
     private CatalogClient catalogClient;
+
+    @Mock
+    private InventoryClient inventoryClient;
 
     @Mock
     private MeilisearchProvider meilisearchProvider;
