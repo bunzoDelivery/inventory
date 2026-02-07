@@ -69,14 +69,23 @@ public class InventoryService {
          * Reserve stock for checkout process
          * Uses atomic check-and-reserve to prevent race conditions and overselling
          */
-        public Mono<StockReservationResponse> reserveStock(ReserveStockRequest request) {
-                log.info("Reserving stock for SKU: {}, Quantity: {}", 
-                        request.getSku(), request.getQuantity());
+        /**
+         * Reserve stock for checkout process (Bulk)
+         * Uses atomic check-and-reserve to prevent race conditions and overselling
+         * Entire batch is transactional: if one item fails, all roll back.
+         */
+        public Mono<List<StockReservationResponse>> reserveStock(ReserveStockRequest request) {
+                log.info("Reserving stock for Order: {}, Items: {}",
+                                request.getOrderId(), request.getItems().size());
 
-                return inventoryItemRepository.findBySku(request.getSku())
-                                .switchIfEmpty(Mono.error(
-                                                new InventoryNotFoundException("SKU not found: " + request.getSku())))
-                                .flatMap(item -> reserveStockAtomic(item, request))
+                return Flux.fromIterable(request.getItems())
+                                .flatMap(itemRequest -> inventoryItemRepository.findBySku(itemRequest.getSku())
+                                                .switchIfEmpty(Mono.error(
+                                                                new InventoryNotFoundException("SKU not found: "
+                                                                                + itemRequest.getSku())))
+                                                .flatMap(item -> reserveStockAtomic(item, itemRequest.getQuantity(),
+                                                                request.getCustomerId(), request.getOrderId())))
+                                .collectList()
                                 .as(transactionalOperator::transactional);
         }
 
@@ -87,6 +96,19 @@ public class InventoryService {
                 log.info("Confirming reservation: {}", reservationId);
 
                 return doConfirmReservation(reservationId)
+                                .as(transactionalOperator::transactional);
+        }
+
+        /**
+         * Confirm all reservations for an order
+         */
+        public Mono<Void> confirmOrderReservations(String orderId) {
+                log.info("Confirming all reservations for order: {}", orderId);
+
+                return stockReservationRepository.findByOrderId(orderId)
+                                .filter(msg -> msg.getStatus() == StockReservation.ReservationStatus.ACTIVE)
+                                .flatMap(reservation -> doConfirmReservation(reservation.getReservationId()))
+                                .then()
                                 .as(transactionalOperator::transactional);
         }
 
@@ -125,7 +147,8 @@ public class InventoryService {
                                                                                                 reservation.getOrderId(),
                                                                                                 "Order confirmed"))
                                                                                 .then(checkLowStockAlert(item))
-                                                                                .then(evictInventoryCache(item.getSku()));
+                                                                                .then(evictInventoryCache(
+                                                                                                item.getSku()));
                                                         });
                                 });
         }
@@ -157,7 +180,8 @@ public class InventoryService {
                                                                         StockMovement.MovementType.UNRESERVE,
                                                                         StockMovement.ReferenceType.RESERVATION,
                                                                         reservationId, "Reservation cancelled"))
-                                                        .then(inventoryItemRepository.findById(reservation.getInventoryItemId()))
+                                                        .then(inventoryItemRepository
+                                                                        .findById(reservation.getInventoryItemId()))
                                                         .flatMap(item -> evictInventoryCache(item.getSku()));
                                 });
         }
@@ -197,11 +221,13 @@ public class InventoryService {
 
                                         // If productId not provided, fetch it from products table
                                         Mono<Long> productIdMono = request.getProductId() != null
-                                                ? Mono.just(request.getProductId())
-                                                : productRepository.findBySku(request.getSku())
-                                                        .map(product -> product.getId())
-                                                        .switchIfEmpty(Mono.error(new InventoryNotFoundException(
-                                                                "Product not found with SKU: " + request.getSku())));
+                                                        ? Mono.just(request.getProductId())
+                                                        : productRepository.findBySku(request.getSku())
+                                                                        .map(product -> product.getId())
+                                                                        .switchIfEmpty(Mono.error(
+                                                                                        new InventoryNotFoundException(
+                                                                                                        "Product not found with SKU: "
+                                                                                                                        + request.getSku())));
 
                                         return productIdMono.flatMap(productId -> {
                                                 InventoryItem newItem = InventoryItem.builder()
@@ -210,20 +236,23 @@ public class InventoryService {
                                                                 .storeId(request.getStoreId())
                                                                 .currentStock(request.getQuantity())
                                                                 .reservedStock(0)
-                                                                .safetyStock(inventoryProperties.getStock().getDefaultSafetyStock())
-                                                                .maxStock(inventoryProperties.getStock().getDefaultMaxStock())
+                                                                .safetyStock(inventoryProperties.getStock()
+                                                                                .getDefaultSafetyStock())
+                                                                .maxStock(inventoryProperties.getStock()
+                                                                                .getDefaultMaxStock())
                                                                 // Don't set version - let R2DBC handle it
                                                                 .lastUpdated(LocalDateTime.now())
                                                                 .build();
 
                                                 return inventoryItemRepository.save(newItem)
-                                                                .flatMap(savedItem -> createStockMovement(savedItem.getId(),
+                                                                .flatMap(savedItem -> createStockMovement(
+                                                                                savedItem.getId(),
                                                                                 request.getQuantity(),
                                                                                 StockMovement.MovementType.INBOUND,
                                                                                 StockMovement.ReferenceType.PURCHASE,
                                                                                 request.getReferenceId(),
                                                                                 "Initial stock for new item")
-                                                                        .thenReturn(savedItem));
+                                                                                .thenReturn(savedItem));
                                         });
                                 }))
                                 .then(); // Convert back to Mono<Void>
@@ -261,16 +290,17 @@ public class InventoryService {
                                                 log.info("Processing {} expired reservations", batch.size());
                                         }
                                         return Flux.fromIterable(batch)
-                                                .flatMap(reservation -> 
-                                                        doCancelReservation(reservation.getReservationId())
-                                                                .onErrorResume(error -> {
-                                                                        log.error("Failed to cancel expired reservation: {}", 
-                                                                                reservation.getReservationId(), error);
-                                                                        // Continue processing other reservations
-                                                                        return Mono.empty();
-                                                                })
-                                                )
-                                                .then();
+                                                        .flatMap(reservation -> doCancelReservation(
+                                                                        reservation.getReservationId())
+                                                                        .onErrorResume(error -> {
+                                                                                log.error("Failed to cancel expired reservation: {}",
+                                                                                                reservation.getReservationId(),
+                                                                                                error);
+                                                                                // Continue processing other
+                                                                                // reservations
+                                                                                return Mono.empty();
+                                                                        }))
+                                                        .then();
                                 })
                                 .doOnComplete(() -> log.debug("Expired reservation cleanup completed"))
                                 .doOnError(error -> log.error("Fatal error in cleanup task", error))
@@ -288,7 +318,8 @@ public class InventoryService {
          * This method ensures that stock check and reservation happen atomically at the
          * database level
          */
-        private Mono<StockReservationResponse> reserveStockAtomic(InventoryItem item, ReserveStockRequest request) {
+        private Mono<StockReservationResponse> reserveStockAtomic(InventoryItem item, Integer quantity, Long customerId,
+                        String orderId) {
                 String reservationId = generateReservationId();
                 Duration reservationTtl = Duration.ofMinutes(inventoryProperties.getReservation().getTtlMinutes());
                 LocalDateTime expiresAt = LocalDateTime.now().plus(reservationTtl);
@@ -296,9 +327,9 @@ public class InventoryService {
                 StockReservation reservation = StockReservation.builder()
                                 .reservationId(reservationId)
                                 .inventoryItemId(item.getId())
-                                .quantity(request.getQuantity())
-                                .customerId(request.getCustomerId())
-                                .orderId(request.getOrderId())
+                                .quantity(quantity)
+                                .customerId(customerId)
+                                .orderId(orderId)
                                 .expiresAt(expiresAt)
                                 .status(StockReservation.ReservationStatus.ACTIVE)
                                 .createdAt(LocalDateTime.now())
@@ -307,30 +338,30 @@ public class InventoryService {
                 // Step 1: Create reservation record
                 return stockReservationRepository.save(reservation)
                                 // Step 2: Atomically check availability AND reserve (prevents race conditions)
-                                .then(inventoryItemRepository.reserveStockAtomic(item.getId(), request.getQuantity()))
+                                .then(inventoryItemRepository.reserveStockAtomic(item.getId(), quantity))
                                 .flatMap(rowsAffected -> {
                                         if (rowsAffected == 0) {
                                                 // Atomic update failed = insufficient stock
                                                 // Rollback: delete the reservation record
                                                 log.warn("Insufficient stock for SKU: {}. Available: {}, Requested: {}",
-                                                                request.getSku(), item.getAvailableStock(),
-                                                                request.getQuantity());
+                                                                item.getSku(), item.getAvailableStock(),
+                                                                quantity);
 
                                                 return stockReservationRepository.delete(reservation)
                                                                 .then(Mono.error(new InsufficientStockException(
                                                                                 String.format("Insufficient stock for SKU: %s. Available: %d, Requested: %d",
-                                                                                                request.getSku(),
+                                                                                                item.getSku(),
                                                                                                 item.getAvailableStock(),
-                                                                                                request.getQuantity()))));
+                                                                                                quantity))));
                                         }
 
                                         // Success! Stock was atomically reserved
                                         log.info("Successfully reserved {} units of SKU: {} (expires in {} min)",
-                                                        request.getQuantity(), request.getSku(), 
+                                                        quantity, item.getSku(),
                                                         inventoryProperties.getReservation().getTtlMinutes());
 
                                         // Step 3: Create audit trail
-                                        return createStockMovement(item.getId(), request.getQuantity(),
+                                        return createStockMovement(item.getId(), quantity,
                                                         StockMovement.MovementType.RESERVE,
                                                         StockMovement.ReferenceType.RESERVATION,
                                                         reservationId, "Stock reservation")
@@ -512,11 +543,9 @@ public class InventoryService {
          */
         public Mono<Map<Long, List<Long>>> getStoresForProducts(List<Long> productIds) {
                 return Flux.fromIterable(productIds)
-                                .flatMap(productId -> 
-                                        getStoresForProduct(productId)
+                                .flatMap(productId -> getStoresForProduct(productId)
                                                 .collectList()
-                                                .map(stores -> Map.entry(productId, stores))
-                                )
+                                                .map(stores -> Map.entry(productId, stores)))
                                 .collectMap(Map.Entry::getKey, Map.Entry::getValue);
         }
 }

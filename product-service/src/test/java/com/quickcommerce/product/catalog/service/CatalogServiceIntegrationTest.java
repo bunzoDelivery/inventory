@@ -47,18 +47,17 @@ class CatalogServiceIntegrationTest extends BaseContainerTest {
     }
 
     @Test
-    @DisplayName("Should get product by SKU")
-    void shouldGetProductBySku() {
+    @DisplayName("Should get products by SKU list")
+    void shouldGetProductsBySkuList() {
         Category category = createTestCategory("Electronics", "electronics");
         createTestProduct("ELEC-001", "Laptop", category.getId(), BigDecimal.valueOf(999.99));
+        createTestProduct("ELEC-002", "Phone", category.getId(), BigDecimal.valueOf(599.99));
 
-        var result = catalogService.getProductBySku("ELEC-001");
+        var result = catalogService.getProductsBySkuList(java.util.List.of("ELEC-001", "ELEC-002"));
 
         StepVerifier.create(result)
-                .assertNext(product -> {
-                    assertThat(product.getSku()).isEqualTo("ELEC-001");
-                    assertThat(product.getName()).isEqualTo("Laptop");
-                })
+                .expectNextMatches(p -> p.getSku().equals("ELEC-001") || p.getSku().equals("ELEC-002"))
+                .expectNextMatches(p -> p.getSku().equals("ELEC-001") || p.getSku().equals("ELEC-002"))
                 .verifyComplete();
     }
 }

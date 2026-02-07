@@ -40,11 +40,17 @@ public class ProductController {
     }
 
     /**
-     * Get product by SKU
+     * Get products by SKU list (Bulk)
+     * POST /api/v1/catalog/products/skus
      */
-    @GetMapping("/sku/{sku}")
-    public Mono<ProductResponse> getProductBySku(@PathVariable String sku) {
-        return catalogService.getProductBySku(sku);
+    /**
+     * Get products by SKU list (Bulk)
+     * POST /api/v1/catalog/products/skus
+     */
+    @PostMapping("/skus")
+    public Flux<ProductResponse> getProductsBySkuList(
+            @Valid @RequestBody com.quickcommerce.product.catalog.dto.ProductListRequest request) {
+        return catalogService.getProductsBySkuList(request.getSkus());
     }
 
     /**

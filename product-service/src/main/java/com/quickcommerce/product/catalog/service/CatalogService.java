@@ -163,13 +163,31 @@ public class CatalogService {
     }
 
     /**
-     * Get product by SKU
+     * Get products by SKU list (Bulk)
+     * Robust implementation with logging and distinctive filtering
      */
-    // @Cacheable(value = "products", key = "'sku:' + #sku") // Disabled for MVP
-    public Mono<ProductResponse> getProductBySku(String sku) {
-        return productRepository.findBySku(sku)
-                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Product", sku)))
-                .map(ProductResponse::fromDomain);
+    public Flux<ProductResponse> getProductsBySkuList(java.util.List<String> skus) {
+        if (skus == null || skus.isEmpty()) {
+            log.warn("Empty SKU list requested");
+            return Flux.empty();
+        }
+
+        // De-duplicate SKUs to prevent redundant DB load
+        java.util.List<String> distinctSkus = skus.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .toList();
+
+        if (distinctSkus.isEmpty()) {
+            return Flux.empty();
+        }
+
+        log.info("Fetching {} products (requested: {})", distinctSkus.size(), skus.size());
+
+        return productRepository.findBySkuIn(distinctSkus)
+                .map(ProductResponse::fromDomain)
+                .doOnComplete(() -> log.debug("Bulk product retrieval completed"))
+                .doOnError(e -> log.error("Error fetching products by SKUs: {}", e.getMessage()));
     }
 
     /**
@@ -202,7 +220,7 @@ public class CatalogService {
      */
     public Flux<ProductResponse> searchProducts(String searchTerm, Integer limit) {
         int searchLimit = (limit != null && limit > 0) ? limit : 50;
-        
+
         // Use smart search that chooses between LIKE and FULLTEXT based on query length
         return productRepository.searchProductsSmart(searchTerm, searchLimit)
                 .map(ProductResponse::fromDomain);
