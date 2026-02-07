@@ -40,12 +40,14 @@ class IndexSyncServiceTest {
 
         when(catalogClient.getAllProducts()).thenReturn(Flux.just(p1, p2));
         when(meilisearchProvider.upsertDocuments(anyList())).thenReturn(Mono.empty());
+        when(inventoryClient.getStoresForProducts(anyList())).thenReturn(Mono.just(Map.of()));
 
         // Act
-        Mono<Void> result = indexSyncService.syncAllProducts();
+        Mono<Integer> result = indexSyncService.syncAllProducts();
 
         // Assert
         StepVerifier.create(result)
+                .expectNext(2)
                 .verifyComplete();
 
         verify(catalogClient, times(1)).getAllProducts();
@@ -55,10 +57,12 @@ class IndexSyncServiceTest {
     @Test
     void syncAllProducts_shouldHandleEmptyCatalog() {
         when(catalogClient.getAllProducts()).thenReturn(Flux.empty());
+        when(inventoryClient.getStoresForProducts(anyList())).thenReturn(Mono.just(Map.of()));
 
-        Mono<Void> result = indexSyncService.syncAllProducts();
+        Mono<Integer> result = indexSyncService.syncAllProducts();
 
         StepVerifier.create(result)
+                .expectNext(0)
                 .verifyComplete();
 
         verify(meilisearchProvider, never()).upsertDocuments(anyList());
@@ -72,8 +76,9 @@ class IndexSyncServiceTest {
         // The service uses buffer().flatMap(), so error in flux terminates it.
 
         when(catalogClient.getAllProducts()).thenReturn(Flux.error(new RuntimeException("Catalog Down")));
+        when(inventoryClient.getStoresForProducts(anyList())).thenReturn(Mono.just(Map.of()));
 
-        Mono<Void> result = indexSyncService.syncAllProducts();
+        Mono<Integer> result = indexSyncService.syncAllProducts();
 
         StepVerifier.create(result)
                 .expectError(RuntimeException.class)

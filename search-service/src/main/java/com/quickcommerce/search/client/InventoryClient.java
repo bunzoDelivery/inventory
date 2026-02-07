@@ -4,6 +4,7 @@ import com.quickcommerce.search.dto.AvailabilityResponse;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Client interface for Inventory Service
@@ -19,4 +20,13 @@ public interface InventoryClient {
      * @return Mono of Availability response with stock status map
      */
     Mono<AvailabilityResponse> checkAvailability(Long storeId, List<Long> productIds);
+
+    /**
+     * Get store IDs for multiple products (bulk)
+     * Returns map of productId -> List<storeId>
+     *
+     * @param productIds List of product IDs
+     * @return Mono of Map with productId to storeIds mapping
+     */
+    Mono<Map<Long, List<Long>>> getStoresForProducts(List<Long> productIds);
 }

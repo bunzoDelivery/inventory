@@ -7,12 +7,14 @@ import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOper
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Real implementation of InventoryClient using WebClient
@@ -68,6 +70,25 @@ public class InventoryClientImpl implements InventoryClient {
                                                         .storeId(storeId)
                                                         .availability(null)
                                                         .build());
+                                });
+        }
+
+        @Override
+        public Mono<Map<Long, List<Long>>> getStoresForProducts(List<Long> productIds) {
+                log.debug("Fetching storeIds for {} products from {}", productIds.size(), inventoryServiceUrl);
+
+                return webClient
+                                .post()
+                                .uri("/api/v1/inventory/products/stores")
+                                .bodyValue(productIds)
+                                .retrieve()
+                                .bodyToMono(new ParameterizedTypeReference<Map<Long, List<Long>>>() {})
+                                .timeout(Duration.ofSeconds(30))
+                                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                                .doOnSuccess(map -> log.debug("Fetched storeIds for {} products", map.size()))
+                                .onErrorResume(e -> {
+                                        log.warn("Failed to fetch storeIds from inventory service: {}", e.getMessage());
+                                        return Mono.just(Map.of());
                                 });
         }
 }

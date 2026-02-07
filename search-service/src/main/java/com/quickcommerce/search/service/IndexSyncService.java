@@ -1,6 +1,7 @@
 package com.quickcommerce.search.service;
 
 import com.quickcommerce.search.client.CatalogClient;
+import com.quickcommerce.search.client.InventoryClient;
 import com.quickcommerce.search.config.SearchProperties;
 import com.quickcommerce.search.health.SyncHealthIndicator;
 import com.quickcommerce.search.model.ProductDocument;
@@ -9,9 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -19,7 +18,6 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -33,10 +31,10 @@ import java.util.stream.Collectors;
 public class IndexSyncService {
 
     private final CatalogClient catalogClient;
+    private final InventoryClient inventoryClient;
     private final MeilisearchProvider meilisearchProvider;
     private final SearchProperties searchProperties;
     private final SyncHealthIndicator syncHealthIndicator;
-    private final WebClient.Builder webClientBuilder;
 
     /**
      * Trigger bulk sync on application startup (if configured)
@@ -97,7 +95,7 @@ public class IndexSyncService {
                     .collect(Collectors.toList());
                 
                 // Fetch storeIds for all products in bulk
-                return fetchStoreIdsForProducts(productIds)
+                return inventoryClient.getStoresForProducts(productIds)
                     .map(storeIdsMap -> {
                         // Enrich each product with storeIds
                         allProducts.forEach(product -> {
