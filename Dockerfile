@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy the entire project context (parent pom and all modules)
 COPY pom.xml .
 COPY common ./common
-COPY inventory-service ./inventory-service
-COPY catalog-service ./catalog-service
+COPY product-service ./product-service
+COPY search-service ./search-service
 
 # Build all modules
 RUN mvn clean package -DskipTests
@@ -18,10 +18,10 @@ WORKDIR /app
 RUN yum install -y curl shadow-utils && yum clean all
 
 # Create non-root user
-RUN groupadd -r inventory && useradd -r -g inventory inventory
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Define which module to package in this image
-ARG MODULE_NAME
+ARG MODULE_NAME=product-service
 # Fail if MODULE_NAME is not set
 RUN if [ -z "$MODULE_NAME" ]; then echo "MODULE_NAME is required" && exit 1; fi
 
@@ -29,13 +29,13 @@ RUN if [ -z "$MODULE_NAME" ]; then echo "MODULE_NAME is required" && exit 1; fi
 COPY --from=build /app/${MODULE_NAME}/target/*.jar app.jar
 
 # Change ownership and switch user
-RUN chown inventory:inventory app.jar
-USER inventory
+RUN chown appuser:appuser app.jar
+USER appuser
 
-EXPOSE 8081 8082
+EXPOSE 8081 8083
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8081/actuator/health || curl -f http://localhost:8082/actuator/health || exit 1
+  CMD curl -f http://localhost:8081/actuator/health || curl -f http://localhost:8083/actuator/health || exit 1
 
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+OptimizeStringConcat"
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
