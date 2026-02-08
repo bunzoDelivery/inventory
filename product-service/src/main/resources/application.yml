@@ -71,15 +71,13 @@ management:
 logging:
   level:
     root: INFO
-    com.quickcommerce: INFO
-    org.springframework.r2dbc: WARN
-    org.springframework.security: WARN
-    reactor.netty: WARN
+    com.quickcommerce: DEBUG
+    org.springframework.r2dbc: DEBUG
+    org.springframework.data.r2dbc: DEBUG
+    io.r2dbc.mysql: DEBUG
+    org.flywaydb: DEBUG
   file:
-    name: ${LOG_FILE:/var/log/product-service/product-service.log}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    name: ./logs/product-service-dev.log
 
 # Inventory Configuration
 inventory:
