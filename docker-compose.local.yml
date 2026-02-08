@@ -1,0 +1,64 @@
+# Docker Compose for Local Testing
+# Includes MySQL for complete local testing before AWS deployment
+
+services:
+    # MySQL Database (for local testing only)
+    mysql:
+        image: mysql:8.0
+        container_name: mysql-local
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: quickcommerce
+            MYSQL_USER: product_user
+            MYSQL_PASSWORD: root
+        ports:
+            - "3306:3306"
+        volumes:
+            - mysql-local-data:/var/lib/mysql
+        networks:
+            - local-network
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+    # Product Service
+    product-service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                MODULE_NAME: product-service
+        container_name: product-service-local
+        environment:
+            SPRING_PROFILES_ACTIVE: dev
+            DB_HOST: mysql
+            DB_PORT: 3306
+            DB_NAME: quickcommerce
+            DB_USERNAME: root
+            DB_PASSWORD: root
+            SERVER_PORT: 8081
+        ports:
+            - "8081:8081"
+        networks:
+            - local-network
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+        depends_on:
+            mysql:
+                condition: service_healthy
+        restart: unless-stopped
+
+networks:
+    local-network:
+        driver: bridge
+
+volumes:
+    mysql-local-data:
+        driver: local

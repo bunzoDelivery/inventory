@@ -1,0 +1,66 @@
+# Additional services for search functionality
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.search.yml up
+
+services:
+    # Search Service
+    search-service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                MODULE_NAME: search-service
+        container_name: search-service
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            # AWS RDS MySQL connection - uses same DB as product-service
+            DB_HOST: ${DB_HOST}
+            DB_PORT: ${DB_PORT:-3306}
+            DB_NAME: ${DB_NAME:-quickcommerce}
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
+            # Meilisearch configuration
+            MEILISEARCH_URL: http://meilisearch:7700
+            MEILISEARCH_API_KEY: masterKey
+            # Product service connection
+            CATALOG_SERVICE_URL: http://product-service:8081
+            INVENTORY_SERVICE_URL: http://product-service:8081
+            SERVER_PORT: 8083
+        ports:
+            - "8083:8083"
+        networks:
+            - quickcommerce-network
+        healthcheck:
+            test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 90s
+        depends_on:
+            meilisearch:
+                condition: service_healthy
+        restart: unless-stopped
+
+    # Meilisearch
+    meilisearch:
+        image: getmeili/meilisearch:v1.9
+        container_name: meilisearch
+        environment:
+            MEILI_MASTER_KEY: masterKey
+            MEILI_ENV: production
+            MEILI_HTTP_ADDR: 0.0.0.0:7700
+        ports:
+            - "7700:7700"
+        volumes:
+            - meilisearch-data:/meili_data
+        networks:
+            - quickcommerce-network
+        healthcheck:
+            test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        restart: unless-stopped
+
+volumes:
+    meilisearch-data:
+        driver: local
