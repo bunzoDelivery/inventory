@@ -10,9 +10,9 @@ spring:
   
   # Production Database Configuration (with environment variable support)
   r2dbc:
-    url: r2dbc:mysql://${DB_HOST:inventorydatabase.cpswwoukkbi2.ap-southeast-1.rds.amazonaws.com}:${DB_PORT:3306}/${DB_NAME:inventory}
+    url: r2dbc:mysql://${DB_HOST:quickcommerce.crys0s8colmh.ap-southeast-2.rds.amazonaws.com}:${DB_PORT:3306}/${DB_NAME:inventory}
     username: ${DB_USERNAME:admin}
-    password: ${DB_PASSWORD:mysqlInv2025}
+    password: ${DB_PASSWORD:mySql123}
     pool:
       initial-size: 20
       max-size: 50
