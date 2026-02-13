@@ -24,11 +24,11 @@ public class Order {
 
     private String orderUuid;
     private String customerId;
-    private String storeId;
+    private Long storeId;
     
-    private String status; // PENDING_PAYMENT, CONFIRMED, CANCELLED
+    private String status; // PENDING_PAYMENT, CONFIRMED, PACKING, DELIVERED, CANCELLED
     
-    private String paymentMethod; // COD, AIRTEL_MONEY
+    private String paymentMethod; // COD, AIRTEL_MONEY, MTN_MONEY
     private String paymentStatus; // PENDING, PAID, COD_PENDING
     
     private BigDecimal totalAmount;
@@ -41,4 +41,6 @@ public class Order {
     private LocalDateTime updatedAt;
     
     private Long shippingAddressId;
+
+    private String idempotencyKey;
 }

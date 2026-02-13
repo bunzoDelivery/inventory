@@ -79,12 +79,18 @@ public class InventoryService {
                                 request.getOrderId(), request.getItems().size());
 
                 return Flux.fromIterable(request.getItems())
-                                .flatMap(itemRequest -> inventoryItemRepository.findBySku(itemRequest.getSku())
-                                                .switchIfEmpty(Mono.error(
-                                                                new InventoryNotFoundException("SKU not found: "
-                                                                                + itemRequest.getSku())))
-                                                .flatMap(item -> reserveStockAtomic(item, itemRequest.getQuantity(),
-                                                                request.getCustomerId(), request.getOrderId())))
+                                .flatMap(itemRequest -> {
+                                        Mono<InventoryItem> itemMono = request.getStoreId() != null
+                                                        ? inventoryItemRepository.findByStoreIdAndSku(
+                                                                        request.getStoreId(), itemRequest.getSku())
+                                                        : inventoryItemRepository.findBySku(itemRequest.getSku());
+                                        return itemMono
+                                                        .switchIfEmpty(Mono.error(
+                                                                        new InventoryNotFoundException("SKU not found: "
+                                                                                        + itemRequest.getSku())))
+                                                        .flatMap(item -> reserveStockAtomic(item, itemRequest.getQuantity(),
+                                                                        request.getCustomerId(), request.getOrderId()));
+                                })
                                 .collectList()
                                 .as(transactionalOperator::transactional);
         }
@@ -151,6 +157,24 @@ public class InventoryService {
                                                                                                 item.getSku()));
                                                         });
                                 });
+        }
+
+        /**
+         * Cancel all reservations for an order (e.g. when order expires or is cancelled)
+         */
+        public Mono<Void> cancelOrderReservations(String orderId) {
+                log.info("Cancelling all reservations for order: {}", orderId);
+
+                return stockReservationRepository.findByOrderId(orderId)
+                                .filter(r -> r.getStatus() == StockReservation.ReservationStatus.ACTIVE)
+                                .flatMap(reservation -> doCancelReservation(reservation.getReservationId())
+                                                .onErrorResume(e -> {
+                                                        log.error("Failed to cancel reservation {} for order {}",
+                                                                        reservation.getReservationId(), orderId, e);
+                                                        return Mono.empty();
+                                                }))
+                                .then()
+                                .as(transactionalOperator::transactional);
         }
 
         /**

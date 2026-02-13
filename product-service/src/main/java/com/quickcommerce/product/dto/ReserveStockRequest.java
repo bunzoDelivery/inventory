@@ -27,6 +27,12 @@ public class ReserveStockRequest {
     @NotNull(message = "Customer ID is required")
     private Long customerId;
 
+    /**
+     * Store ID for store-scoped inventory lookup. When provided, reserves from this store.
+     * Nullable for backward compatibility (falls back to findBySku).
+     */
+    private Long storeId;
+
     @NotEmpty(message = "Items list cannot be empty")
     @Valid
     private List<StockItemRequest> items;

@@ -1,5 +1,6 @@
 package com.quickcommerce.order.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -13,29 +14,24 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateOrderRequest {
-    
-    @NotNull
+public class PreviewOrderRequest {
+
+    @NotNull(message = "Store ID is required")
     private Long storeId;
-    
-    @NotNull
-    private Long customerId;
-    
-    @NotEmpty
-    private List<OrderItemRequest> items;
-    
-    @NotNull
-    private String paymentMethod; // COD, AIRTEL_MONEY
+
+    @NotEmpty(message = "Items list cannot be empty")
+    @Valid
+    private List<PreviewItemRequest> items;
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class OrderItemRequest {
+    public static class PreviewItemRequest {
         @NotNull
         private String sku;
-        
+
         @NotNull
-        private Integer quantity;
+        private Integer qty;
     }
 }

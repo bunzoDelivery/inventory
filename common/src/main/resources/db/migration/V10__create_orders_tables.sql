@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS customer_orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_uuid VARCHAR(36) UNIQUE NOT NULL,
     customer_id VARCHAR(50) NOT NULL,
-    store_id VARCHAR(50) NOT NULL,
+    store_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL,
     payment_method VARCHAR(20) NOT NULL,
     payment_status VARCHAR(20) NOT NULL,
@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS customer_orders (
     currency VARCHAR(3) DEFAULT 'ZMW',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    shipping_address_id BIGINT
+    shipping_address_id BIGINT,
+    idempotency_key VARCHAR(64) UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS order_items (
@@ -26,3 +27,4 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX idx_orders_customer_id ON customer_orders(customer_id);
 CREATE INDEX idx_orders_status ON customer_orders(status);
 CREATE INDEX idx_orders_created_at ON customer_orders(created_at);
+CREATE INDEX idx_orders_status_created_at ON customer_orders(status, created_at);

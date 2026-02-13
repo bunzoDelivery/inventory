@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 public interface OrderRepository extends R2dbcRepository<Order, Long> {
     
     Mono<Order> findByOrderUuid(String orderUuid);
+
+    Mono<Order> findByIdempotencyKey(String idempotencyKey);
     
     Flux<Order> findByStatusAndCreatedAtBefore(String status, LocalDateTime cutoff);
 }

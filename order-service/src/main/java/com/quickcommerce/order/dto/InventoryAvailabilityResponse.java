@@ -4,24 +4,26 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ReserveStockRequest {
-    private String orderId;
-    private Long customerId;
+public class InventoryAvailabilityResponse {
+
     private Long storeId;
-    private List<StockItemRequest> items;
+    private List<ProductAvailability> products;
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class StockItemRequest {
+    public static class ProductAvailability {
         private String sku;
-        private Integer quantity;
+        private Integer availableStock;
+        private Boolean inStock;
+        private String availabilityStatus;
     }
 }

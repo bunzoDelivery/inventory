@@ -69,7 +69,7 @@ class OrderServiceIntegrationTest extends BaseIntegrationTest {
         // Mock Catalog Response
         mockProductService.enqueue(new MockResponse()
                 .setBody(objectMapper.writeValueAsString(List.of(
-                        new ProductPriceResponse("SKU1", BigDecimal.valueOf(100.0), true)
+                        ProductPriceResponse.builder().sku("SKU1").basePrice(BigDecimal.valueOf(100.0)).build()
                 )))
                 .addHeader("Content-Type", "application/json"));
 
@@ -85,7 +85,7 @@ class OrderServiceIntegrationTest extends BaseIntegrationTest {
 
         CreateOrderRequest request = CreateOrderRequest.builder()
                 .customerId(1L)
-                .storeId("STORE1")
+                .storeId(1L)
                 .paymentMethod("AIRTEL_MONEY")
                 .items(List.of(new CreateOrderRequest.OrderItemRequest("SKU1", 1)))
                 .build();
@@ -107,7 +107,7 @@ class OrderServiceIntegrationTest extends BaseIntegrationTest {
         // Mock Catalog
          mockProductService.enqueue(new MockResponse()
                 .setBody(objectMapper.writeValueAsString(List.of(
-                        new ProductPriceResponse("SKU1", BigDecimal.valueOf(50.0), true)
+                        ProductPriceResponse.builder().sku("SKU1").basePrice(BigDecimal.valueOf(50.0)).build()
                 )))
                 .addHeader("Content-Type", "application/json"));
 
@@ -124,7 +124,7 @@ class OrderServiceIntegrationTest extends BaseIntegrationTest {
 
         CreateOrderRequest request = CreateOrderRequest.builder()
                 .customerId(2L)
-                .storeId("STORE1")
+                .storeId(1L)
                 .paymentMethod("COD")
                 .items(List.of(new CreateOrderRequest.OrderItemRequest("SKU1", 1)))
                 .build();

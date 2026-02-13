@@ -46,7 +46,7 @@ client:
   inventory-service:
     url: ${INVENTORY_SERVICE_URL:http://localhost:8081}
 
-# Resilience4j
+# Resilience4j (both Catalog and Inventory clients call product-service)
 resilience4j:
   circuitbreaker:
     instances:

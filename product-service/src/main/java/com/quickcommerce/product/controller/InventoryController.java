@@ -106,6 +106,24 @@ public class InventoryController {
         }
 
         /**
+         * Cancel all reservations for an order
+         */
+        @PostMapping("/reservations/order/{orderId}/cancel")
+        public Mono<ResponseEntity<Map<String, String>>> cancelOrderReservations(@PathVariable String orderId) {
+                log.info("Cancelling reservations for order: {}", orderId);
+
+                return inventoryService.cancelOrderReservations(orderId)
+                                .then(Mono.just(ResponseEntity.ok(Map.of(
+                                                "orderId", orderId,
+                                                "status", "CANCELLED",
+                                                "message", "Order reservations cancelled successfully"))))
+                                .doOnSuccess(result -> log.info("Order reservations cancelled successfully: {}",
+                                                orderId))
+                                .doOnError(error -> log.error("Failed to cancel order reservations: {}", orderId,
+                                                error));
+        }
+
+        /**
          * Cancel reservation
          */
         @PostMapping("/reservations/{reservationId}/cancel")
