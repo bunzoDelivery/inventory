@@ -4,8 +4,6 @@ import com.quickcommerce.order.dto.InventoryAvailabilityRequest;
 import com.quickcommerce.order.dto.InventoryAvailabilityResponse;
 import com.quickcommerce.order.dto.ReserveStockRequest;
 import com.quickcommerce.order.dto.StockReservationResponse;
-import com.quickcommerce.order.dto.ReserveStockRequest;
-import com.quickcommerce.order.dto.StockReservationResponse;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 import io.github.resilience4j.reactor.retry.RetryOperator;
@@ -28,9 +26,9 @@ public class InventoryClient {
     private final Retry retry;
 
     public InventoryClient(WebClient webClient,
-                          @Value("${client.inventory-service.url}") String inventoryServiceUrl,
-                          @Qualifier("productServiceCircuitBreaker") CircuitBreaker circuitBreaker,
-                          @Qualifier("productServiceRetry") Retry retry) {
+                           @Value("${client.inventory-service.url}") String inventoryServiceUrl,
+                           @Qualifier("productServiceCircuitBreaker") CircuitBreaker circuitBreaker,
+                           @Qualifier("productServiceRetry") Retry retry) {
         this.webClient = webClient;
         this.inventoryServiceUrl = inventoryServiceUrl;
         this.circuitBreaker = circuitBreaker;

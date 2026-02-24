@@ -1,6 +1,7 @@
 package com.quickcommerce.order.repository;
 
 import com.quickcommerce.order.domain.Order;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -10,10 +11,16 @@ import java.time.LocalDateTime;
 
 @Repository
 public interface OrderRepository extends R2dbcRepository<Order, Long> {
-    
+
     Mono<Order> findByOrderUuid(String orderUuid);
 
     Mono<Order> findByIdempotencyKey(String idempotencyKey);
-    
+
     Flux<Order> findByStatusAndCreatedAtBefore(String status, LocalDateTime cutoff);
+
+    Flux<Order> findByCustomerIdOrderByCreatedAtDesc(String customerId, Pageable pageable);
+
+    Flux<Order> findByStoreIdOrderByCreatedAtDesc(Long storeId, Pageable pageable);
+
+    Flux<Order> findByStoreIdAndStatusOrderByCreatedAtDesc(Long storeId, String status, Pageable pageable);
 }

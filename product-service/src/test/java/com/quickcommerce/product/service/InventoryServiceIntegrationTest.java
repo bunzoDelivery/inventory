@@ -52,7 +52,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         void shouldReserveStockSuccessfully() {
                 ReserveStockRequest request = ReserveStockRequest.builder()
                                 .items(List.of(new ReserveStockRequest.StockItemRequest("SKU001", 10)))
-                                .customerId(123L)
+                                .customerId("123")
                                 .orderId("ORDER123")
                                 .build();
 
@@ -79,7 +79,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         void shouldThrowInsufficientStockException() {
                 ReserveStockRequest request = ReserveStockRequest.builder()
                                 .items(List.of(new ReserveStockRequest.StockItemRequest("SKU001", 150)))
-                                .customerId(123L)
+                                .customerId("123")
                                 .orderId("ORDER123")
                                 .build();
 
@@ -118,7 +118,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
                                         ReserveStockRequest req = ReserveStockRequest.builder()
                                                         .items(List.of(new ReserveStockRequest.StockItemRequest(
                                                                         "SKU_CONC", 1)))
-                                                        .customerId((long) i)
+                                                        .customerId(String.valueOf(i))
                                                         .orderId("ORDER_" + i)
                                                         .build();
 
@@ -140,7 +140,7 @@ class InventoryServiceIntegrationTest extends BaseContainerTest {
         void shouldConfirmReservationSuccessfully() {
                 ReserveStockRequest reserveRequest = ReserveStockRequest.builder()
                                 .items(List.of(new ReserveStockRequest.StockItemRequest("SKU001", 10)))
-                                .customerId(123L)
+                                .customerId("123")
                                 .orderId("ORDER123")
                                 .build();
 

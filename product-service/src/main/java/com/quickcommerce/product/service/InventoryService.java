@@ -89,7 +89,7 @@ public class InventoryService {
                                                                         new InventoryNotFoundException("SKU not found: "
                                                                                         + itemRequest.getSku())))
                                                         .flatMap(item -> reserveStockAtomic(item, itemRequest.getQuantity(),
-                                                                        request.getCustomerId(), request.getOrderId()));
+                                                                        parseCustomerIdToLong(request.getCustomerId()), request.getOrderId()));
                                 })
                                 .collectList()
                                 .as(transactionalOperator::transactional);
@@ -336,6 +336,16 @@ public class InventoryService {
         }
 
         // Private helper methods
+
+        /** Parse customer ID string to Long for DB (supports numeric strings or hashes non-numeric IDs). */
+        private static Long parseCustomerIdToLong(String customerId) {
+                if (customerId == null || customerId.isBlank()) return 0L;
+                try {
+                        return Long.parseLong(customerId.trim());
+                } catch (NumberFormatException e) {
+                        return (long) Math.abs(customerId.hashCode());
+                }
+        }
 
         /**
          * Atomically reserve stock with race condition prevention

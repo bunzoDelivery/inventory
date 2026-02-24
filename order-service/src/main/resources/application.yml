@@ -15,7 +15,7 @@ spring:
       max-idle-time: 30m
       validation-query: SELECT 1
 
-  # Flyway Configuration (JDBC)
+  # Flyway Configuration (JDBC - uses common module migrations)
   flyway:
     enabled: true
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
@@ -46,7 +46,13 @@ client:
   inventory-service:
     url: ${INVENTORY_SERVICE_URL:http://localhost:8081}
 
-# Resilience4j (both Catalog and Inventory clients call product-service)
+# Order Business Config
+order:
+  delivery-fee-zmw: ${ORDER_DELIVERY_FEE:15.00}
+  payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:15}
+  cleanup-interval-ms: ${ORDER_CLEANUP_INTERVAL_MS:60000}
+
+# Resilience4j
 resilience4j:
   circuitbreaker:
     instances:
@@ -55,8 +61,29 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+
   retry:
     instances:
       product-service:
         max-attempts: 3
         wait-duration: 500ms
+        retry-exceptions:
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+
+  # 30 order-creation requests per customer per minute
+  ratelimiter:
+    instances:
+      order-creation:
+        limit-for-period: 5
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

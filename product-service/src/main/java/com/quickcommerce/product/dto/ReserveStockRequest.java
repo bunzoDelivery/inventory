@@ -24,8 +24,8 @@ public class ReserveStockRequest {
     @NotBlank(message = "Order ID is required")
     private String orderId;
 
-    @NotNull(message = "Customer ID is required")
-    private Long customerId;
+    @NotBlank(message = "Customer ID is required")
+    private String customerId;
 
     /**
      * Store ID for store-scoped inventory lookup. When provided, reserves from this store.

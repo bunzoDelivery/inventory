@@ -1,5 +1,6 @@
 package com.quickcommerce.order.exception;
 
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,6 +42,13 @@ public class GlobalExceptionHandler {
         log.warn("Invalid order state: {}", ex.getMessage());
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", ex.getMessage())));
+    }
+
+    @ExceptionHandler(RequestNotPermitted.class)
+    public Mono<ResponseEntity<Map<String, String>>> handleRateLimit(RequestNotPermitted ex) {
+        log.warn("Rate limit exceeded: {}", ex.getMessage());
+        return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("error", "Too many requests. Please try again shortly.")));
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

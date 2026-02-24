@@ -2,6 +2,8 @@ package com.quickcommerce.order.config;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.context.annotation.Bean;
@@ -18,5 +20,10 @@ public class ResilienceConfig {
     @Bean("productServiceRetry")
     public Retry productServiceRetry(RetryRegistry registry) {
         return registry.retry("product-service");
+    }
+
+    @Bean("orderCreationRateLimiter")
+    public RateLimiter orderCreationRateLimiter(RateLimiterRegistry registry) {
+        return registry.rateLimiter("order-creation");
     }
 }

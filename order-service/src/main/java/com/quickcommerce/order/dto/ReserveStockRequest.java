@@ -12,7 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ReserveStockRequest {
     private String orderId;
-    private Long customerId;
+    private String customerId;
     private Long storeId;
     private List<StockItemRequest> items;
 

@@ -3,19 +3,23 @@ package com.quickcommerce.order.service;
 import com.quickcommerce.order.client.CatalogClient;
 import com.quickcommerce.order.client.InventoryClient;
 import com.quickcommerce.order.client.NotificationClient;
+import com.quickcommerce.order.domain.*;
+import com.quickcommerce.order.dto.*;
 import com.quickcommerce.order.exception.InsufficientStockException;
 import com.quickcommerce.order.exception.InvalidOrderStateException;
 import com.quickcommerce.order.exception.OrderNotFoundException;
 import com.quickcommerce.order.exception.ServiceUnavailableException;
-import com.quickcommerce.order.domain.Order;
-import com.quickcommerce.order.domain.OrderItem;
-import com.quickcommerce.order.dto.*;
+import com.quickcommerce.order.repository.OrderEventRepository;
 import com.quickcommerce.order.repository.OrderItemRepository;
 import com.quickcommerce.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -31,21 +35,31 @@ public class OrderService {
 
     private final OrderRepository orderRepo;
     private final OrderItemRepository orderItemRepo;
+    private final OrderEventRepository orderEventRepo;
     private final CatalogClient catalogClient;
     private final InventoryClient inventoryClient;
     private final NotificationClient notificationClient;
     private final TransactionalOperator transactionalOperator;
 
+    @Value("${order.delivery-fee-zmw:15.00}")
+    private BigDecimal deliveryFee;
+
+    // ─── Create Order ─────────────────────────────────────────────────────────
+
     public Mono<OrderResponse> createOrder(CreateOrderRequest req, String idempotencyKey) {
-        log.info("Creating order for customer: {}", req.getCustomerId());
+        log.info("Creating order for customer: {} store: {}", req.getCustomerId(), req.getStoreId());
 
         Mono<OrderResponse> createNew = createOrderInternal(req, idempotencyKey);
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             return orderRepo.findByIdempotencyKey(idempotencyKey)
-                    .flatMap(existingOrder -> orderItemRepo.findByOrderId(existingOrder.getId()).collectList()
-                            .map(items -> mapToResponse(existingOrder, items)))
-                    .switchIfEmpty(createNew);
+                    .flatMap(existing -> buildFullResponse(existing))
+                    .switchIfEmpty(createNew)
+                    .onErrorResume(DataIntegrityViolationException.class, e -> {
+                        log.warn("Duplicate idempotency key {}, returning existing order", idempotencyKey);
+                        return orderRepo.findByIdempotencyKey(idempotencyKey)
+                                .flatMap(existing -> buildFullResponse(existing));
+                    });
         }
 
         return createNew;
@@ -56,21 +70,25 @@ public class OrderService {
                 .map(CreateOrderRequest.OrderItemRequest::getSku)
                 .toList();
 
-        // 1. Fetch Prices & Validate
         return catalogClient.getPrices(skus)
                 .collectList()
                 .flatMap(productPrices -> {
                     Map<String, BigDecimal> priceMap = productPrices.stream()
                             .collect(Collectors.toMap(ProductPriceResponse::getSku, ProductPriceResponse::getPrice));
 
+                    // Validate all SKUs resolved and prices are sane
                     for (String sku : skus) {
                         if (!priceMap.containsKey(sku)) {
                             return Mono.error(new RuntimeException("Product not found: " + sku));
                         }
+                        BigDecimal price = priceMap.get(sku);
+                        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+                            return Mono.error(new RuntimeException("Invalid price for product: " + sku));
+                        }
                     }
 
+                    boolean isCod = PaymentMethod.valueOf(req.getPaymentMethod()).isCashOnDelivery();
                     String orderUuid = UUID.randomUUID().toString();
-                    boolean isCod = "COD".equalsIgnoreCase(req.getPaymentMethod());
 
                     List<OrderItem> items = req.getItems().stream()
                             .map(itemReq -> {
@@ -83,9 +101,11 @@ public class OrderService {
                                         .build();
                             }).toList();
 
-                    BigDecimal totalAmount = items.stream()
+                    BigDecimal itemsTotal = items.stream()
                             .map(OrderItem::getSubTotal)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                    CreateOrderRequest.DeliveryRequest del = req.getDelivery();
 
                     Order order = Order.builder()
                             .orderUuid(orderUuid)
@@ -93,16 +113,22 @@ public class OrderService {
                             .customerId(req.getCustomerId().toString())
                             .paymentMethod(req.getPaymentMethod())
                             .currency("ZMW")
-                            .totalAmount(totalAmount)
+                            .totalAmount(itemsTotal)
+                            .deliveryFee(deliveryFee)
+                            .deliveryAddress(del.getAddress())
+                            .deliveryLat(del.getLatitude() != null ? BigDecimal.valueOf(del.getLatitude()) : null)
+                            .deliveryLng(del.getLongitude() != null ? BigDecimal.valueOf(del.getLongitude()) : null)
+                            .deliveryPhone(del.getPhone())
+                            .deliveryNotes(del.getNotes())
                             .idempotencyKey(idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey : null)
                             .build();
 
                     if (isCod) {
-                        order.setStatus("CONFIRMED");
-                        order.setPaymentStatus("COD_PENDING");
+                        order.setStatus(OrderStatus.CONFIRMED.name());
+                        order.setPaymentStatus(PaymentStatus.COD_PENDING.name());
                     } else {
-                        order.setStatus("PENDING_PAYMENT");
-                        order.setPaymentStatus("PENDING");
+                        order.setStatus(OrderStatus.PENDING_PAYMENT.name());
+                        order.setPaymentStatus(PaymentStatus.PENDING.name());
                     }
 
                     ReserveStockRequest reserveReq = ReserveStockRequest.builder()
@@ -114,20 +140,23 @@ public class OrderService {
                                     .toList())
                             .build();
 
-                    // 2. Reserve stock first (before saving order)
                     return inventoryClient.reserveStock(reserveReq)
                             .collectList()
                             .flatMap(reservations -> {
                                 if (reservations.isEmpty()) {
                                     return Mono.error(new InsufficientStockException("Insufficient stock"));
                                 }
-                                // 3. Save order + items (transactional)
+
+                                OrderStatus initialStatus = OrderStatus.valueOf(order.getStatus());
+
                                 return orderRepo.save(order)
                                         .flatMap(savedOrder -> {
                                             items.forEach(item -> item.setOrderId(savedOrder.getId()));
                                             return orderItemRepo.saveAll(items)
                                                     .collectList()
-                                                    .map(savedItems -> savedOrder);
+                                                    .flatMap(savedItems ->
+                                                            orderEventRepo.save(OrderEvent.created(savedOrder.getId(), initialStatus))
+                                                                    .thenReturn(savedOrder));
                                         })
                                         .as(transactionalOperator::transactional)
                                         .flatMap(savedOrder -> {
@@ -138,61 +167,145 @@ public class OrderService {
                                                                         .subscribe(v -> {}, e -> log.error(
                                                                                 "Notification failed for order {}",
                                                                                 savedOrder.getOrderUuid(), e))))
-                                                        .thenReturn(mapToResponse(savedOrder, items));
+                                                        .then(buildFullResponse(savedOrder));
                                             }
-                                            return Mono.just(mapToResponse(savedOrder, items));
+                                            return buildFullResponse(savedOrder);
                                         })
                                         .onErrorResume(saveError -> {
-                                            log.error("Failed to save order after reserve, cancelling reservations", saveError);
+                                            log.error("Failed to save order, releasing reservations for {}", orderUuid, saveError);
                                             return inventoryClient.cancelOrderReservations(orderUuid)
                                                     .then(Mono.error(saveError));
                                         });
                             })
-                            .onErrorMap(e -> {
-                                log.error("Failed to reserve stock", e);
-                                if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                    int status = ((org.springframework.web.reactive.function.client.WebClientResponseException) e).getStatusCode().value();
-                                    if (status >= 500 || status == 408) {
-                                        return new ServiceUnavailableException("Inventory service unavailable", e);
-                                    }
-                                }
-                                String msg = e.getMessage();
-                                if (msg != null && (msg.contains("Connection") || msg.contains("timeout") || msg.contains("Timeout"))) {
-                                    return new ServiceUnavailableException("Inventory service unavailable", e);
-                                }
-                                return new InsufficientStockException("Insufficient stock or product not found", e);
+                            .onErrorMap(e -> mapInventoryError(e));
+                });
+    }
+
+    // ─── Mock Payment ──────────────────────────────────────────────────────────
+
+    public Mono<OrderResponse> mockPayment(String orderUuid) {
+        return orderRepo.findByOrderUuid(orderUuid)
+                .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
+                .flatMap(order -> {
+                    if (order.paymentMethodEnum().isCashOnDelivery()) {
+                        return Mono.error(new InvalidOrderStateException("COD orders cannot be paid online"));
+                    }
+
+                    OrderStatus current = order.orderStatus();
+                    if (!current.canTransitionTo(OrderStatus.CONFIRMED)) {
+                        return Mono.error(new InvalidOrderStateException(
+                                "Cannot confirm payment for order in status: " + current));
+                    }
+
+                    OrderStatus previous = current;
+                    order.setStatus(OrderStatus.CONFIRMED.name());
+                    order.setPaymentStatus(PaymentStatus.PAID.name());
+
+                    return orderRepo.save(order)
+                            .flatMap(savedOrder ->
+                                    orderEventRepo.save(OrderEvent.paymentReceived(savedOrder.getId(), savedOrder.paymentMethodEnum()))
+                                            .then(inventoryClient.confirmReservation(savedOrder.getOrderUuid()))
+                                            .then(Mono.fromRunnable(() ->
+                                                    notificationClient.sendOrderConfirmedEvent(savedOrder)
+                                                            .subscribe(v -> {}, e -> log.error(
+                                                                    "Notification failed for order {}",
+                                                                    savedOrder.getOrderUuid(), e))))
+                                            .then(buildFullResponse(savedOrder)));
+                });
+    }
+
+    // ─── Cancel Order ──────────────────────────────────────────────────────────
+
+    public Mono<OrderResponse> cancelOrder(String orderUuid, String requestingCustomerId, String reason) {
+        return orderRepo.findByOrderUuid(orderUuid)
+                .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
+                .flatMap(order -> {
+                    if (!order.getCustomerId().equals(requestingCustomerId)) {
+                        return Mono.error(new InvalidOrderStateException("Order does not belong to this customer"));
+                    }
+
+                    OrderStatus current = order.orderStatus();
+                    if (!current.canTransitionTo(OrderStatus.CANCELLED)) {
+                        return Mono.error(new InvalidOrderStateException(
+                                "Order in status " + current + " cannot be cancelled"));
+                    }
+
+                    order.setStatus(OrderStatus.CANCELLED.name());
+                    order.setCancelledReason(reason);
+
+                    return orderRepo.save(order)
+                            .flatMap(savedOrder -> {
+                                Mono<Void> releaseStock = inventoryClient.cancelOrderReservations(orderUuid)
+                                        .onErrorResume(e -> {
+                                            log.error("Failed to release stock for cancelled order {}", orderUuid, e);
+                                            return Mono.empty();
+                                        });
+
+                                return orderEventRepo.save(
+                                                OrderEvent.cancelled(savedOrder.getId(), current, reason, "CUSTOMER"))
+                                        .then(releaseStock)
+                                        .then(buildFullResponse(savedOrder));
+                            });
+                })
+                .doOnSuccess(r -> log.info("Order cancelled: {}", orderUuid));
+    }
+
+    // ─── Fulfillment Status Updates ────────────────────────────────────────────
+
+    public Mono<OrderResponse> updateStatus(String orderUuid, String targetStatusStr, String actorId, String notes) {
+        OrderStatus targetStatus = parseStatus(targetStatusStr);
+
+        return orderRepo.findByOrderUuid(orderUuid)
+                .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
+                .flatMap(order -> {
+                    OrderStatus current = order.orderStatus();
+
+                    if (!current.canTransitionTo(targetStatus)) {
+                        return Mono.error(new InvalidOrderStateException(
+                                "Cannot transition from " + current + " to " + targetStatus));
+                    }
+
+                    order.setStatus(targetStatus.name());
+
+                    return orderRepo.save(order)
+                            .flatMap(savedOrder -> {
+                                OrderEvent event = OrderEvent.statusChanged(
+                                        savedOrder.getId(), current, targetStatus, actorId);
+                                event.setNotes(notes);
+                                return orderEventRepo.save(event)
+                                        .then(buildFullResponse(savedOrder));
                             });
                 });
     }
 
+    // ─── Query Methods ─────────────────────────────────────────────────────────
 
-    public Mono<OrderResponse> mockPayment(String orderUuid) {
+    public Mono<OrderResponse> getOrder(String orderUuid) {
         return orderRepo.findByOrderUuid(orderUuid)
-                .flatMap(order -> {
-                    if ("COD".equalsIgnoreCase(order.getPaymentMethod())) {
-                        return Mono.error(new InvalidOrderStateException("COD orders cannot be paid online"));
-                    }
-                    if (!"PENDING_PAYMENT".equals(order.getStatus())) {
-                        return Mono.error(new InvalidOrderStateException("Order is not in pending payment state"));
-                    }
+                .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
+                .flatMap(this::buildFullResponse);
+    }
 
-                    order.setStatus("CONFIRMED");
-                    order.setPaymentStatus("PAID");
+    public Flux<OrderResponse> getCustomerOrders(String customerId, int page, int size) {
+        return orderRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, PageRequest.of(page, size))
+                .flatMap(this::buildFullResponse);
+    }
 
-                    return orderRepo.save(order)
-                            .flatMap(savedOrder ->
-                                    inventoryClient.confirmReservation(savedOrder.getOrderUuid())
-                                            .then(orderItemRepo.findByOrderId(savedOrder.getId()).collectList())
-                                            .map(items -> {
-                                                notificationClient.sendOrderConfirmedEvent(savedOrder)
-                                                        .subscribe(v -> {}, e -> log.error(
-                                                                "Notification failed for order {}",
-                                                                savedOrder.getOrderUuid(), e));
-                                                return mapToResponse(savedOrder, items);
-                                            })
-                            );
-                })
-                .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found")));
+    public Flux<OrderResponse> getStoreOrders(Long storeId, String status, int page, int size) {
+        if (status != null && !status.isBlank()) {
+            return orderRepo.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, status.toUpperCase(), PageRequest.of(page, size))
+                    .flatMap(this::buildFullResponse);
+        }
+        return orderRepo.findByStoreIdOrderByCreatedAtDesc(storeId, PageRequest.of(page, size))
+                .flatMap(this::buildFullResponse);
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    private Mono<OrderResponse> buildFullResponse(Order order) {
+        return orderItemRepo.findByOrderId(order.getId())
+                .collectList()
+                .map(items -> mapToResponse(order, items));
     }
 
     private OrderResponse mapToResponse(Order order, List<OrderItem> items) {
@@ -201,16 +314,66 @@ public class OrderService {
                         i.getSku(), i.getQty(), i.getUnitPrice(), i.getSubTotal()))
                 .toList();
 
-        String message = "CONFIRMED".equals(order.getStatus())
-                ? "Order placed successfully"
-                : "Please proceed to payment";
+        String message = switch (OrderStatus.valueOf(order.getStatus())) {
+            case CONFIRMED        -> "Order confirmed";
+            case PENDING_PAYMENT  -> "Please proceed to payment";
+            case PACKING          -> "Your order is being packed";
+            case OUT_FOR_DELIVERY -> "Your order is out for delivery";
+            case DELIVERED        -> "Order delivered";
+            case CANCELLED        -> "Order cancelled";
+        };
+
+        BigDecimal itemsTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal fee = order.getDeliveryFee() != null ? order.getDeliveryFee() : BigDecimal.ZERO;
+
+        OrderResponse.DeliveryInfo deliveryInfo = null;
+        if (order.getDeliveryAddress() != null) {
+            deliveryInfo = OrderResponse.DeliveryInfo.builder()
+                    .address(order.getDeliveryAddress())
+                    .latitude(order.getDeliveryLat() != null ? order.getDeliveryLat().doubleValue() : null)
+                    .longitude(order.getDeliveryLng() != null ? order.getDeliveryLng().doubleValue() : null)
+                    .phone(order.getDeliveryPhone())
+                    .notes(order.getDeliveryNotes())
+                    .build();
+        }
 
         return OrderResponse.builder()
                 .orderId(order.getOrderUuid())
                 .status(order.getStatus())
+                .paymentMethod(order.getPaymentMethod())
+                .paymentStatus(order.getPaymentStatus())
                 .message(message)
-                .totalAmount(order.getTotalAmount())
+                .itemsTotal(itemsTotal)
+                .deliveryFee(fee)
+                .grandTotal(itemsTotal.add(fee))
+                .currency(order.getCurrency())
+                .delivery(deliveryInfo)
                 .items(itemResponses)
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
                 .build();
+    }
+
+    private OrderStatus parseStatus(String statusStr) {
+        try {
+            return OrderStatus.valueOf(statusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidOrderStateException("Unknown status: " + statusStr);
+        }
+    }
+
+    private Throwable mapInventoryError(Throwable e) {
+        log.error("Inventory operation failed", e);
+        if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException wcEx) {
+            int status = wcEx.getStatusCode().value();
+            if (status >= 500 || status == 408) {
+                return new ServiceUnavailableException("Inventory service unavailable", e);
+            }
+        }
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("Connection") || msg.contains("timeout") || msg.contains("Timeout"))) {
+            return new ServiceUnavailableException("Inventory service unavailable", e);
+        }
+        return new InsufficientStockException("Insufficient stock or product not found", e);
     }
 }

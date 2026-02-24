@@ -25,22 +25,46 @@ public class Order {
     private String orderUuid;
     private String customerId;
     private Long storeId;
-    
-    private String status; // PENDING_PAYMENT, CONFIRMED, PACKING, DELIVERED, CANCELLED
-    
-    private String paymentMethod; // COD, AIRTEL_MONEY, MTN_MONEY
-    private String paymentStatus; // PENDING, PAID, COD_PENDING
-    
+
+    // Logistic status (state machine enforced in service layer)
+    private String status;
+
+    // Money tracking
+    private String paymentMethod;
+    private String paymentStatus;
+
     private BigDecimal totalAmount;
-    private String currency; // Default ZMW
+    private BigDecimal deliveryFee;
+    private String currency;
+
+    // Delivery details
+    private String deliveryAddress;
+    private BigDecimal deliveryLat;
+    private BigDecimal deliveryLng;
+    private String deliveryPhone;
+    private String deliveryNotes;
+
+    private String cancelledReason;
 
     @CreatedDate
     private LocalDateTime createdAt;
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
-    
-    private Long shippingAddressId;
 
+    private Long shippingAddressId;
     private String idempotencyKey;
+
+    public OrderStatus orderStatus() {
+        return OrderStatus.valueOf(this.status);
+    }
+
+    public PaymentMethod paymentMethodEnum() {
+        return PaymentMethod.valueOf(this.paymentMethod);
+    }
+
+    public BigDecimal getGrandTotal() {
+        BigDecimal fee = deliveryFee != null ? deliveryFee : BigDecimal.ZERO;
+        return totalAmount != null ? totalAmount.add(fee) : fee;
+    }
 }
