@@ -26,7 +26,7 @@ services:
             interval: 30s
             timeout: 10s
             retries: 5
-            start_period: 60s
+            start_period: 120s
         restart: unless-stopped
         networks:
             - quickcommerce-network
@@ -79,7 +79,7 @@ services:
             DB_PASSWORD: ${DB_PASSWORD}
             SERVER_PORT: 8083
             MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
-            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKey}
+            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-QuickCommerce2024Prod}
             INVENTORY_SERVICE_URL: http://product-service:8081
             CATALOG_SERVICE_URL: http://product-service:8081
         ports:
@@ -94,6 +94,8 @@ services:
         depends_on:
             product-service:
                 condition: service_healthy
+            meilisearch:
+                condition: service_healthy
         networks:
             - quickcommerce-network
 
@@ -102,7 +104,7 @@ services:
         image: getmeili/meilisearch:v1.9
         container_name: meilisearch
         environment:
-            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKey}
+            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-QuickCommerce2024Prod}
             MEILI_ENV: production
         ports:
             - "7700:7700"
