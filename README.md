@@ -82,9 +82,9 @@ GET /api/v1/catalog/categories
 ```
 Returns all active categories in a flat list.
 
-**Get Category Tree for Home (Hierarchical Structure)**
+**Get Category Tree (Hierarchical Structure)**
 ```bash
-GET /api/v1/catalog/categories/home
+GET /api/v1/catalog/categories/tree
 ```
 Returns all active categories organized in a hierarchical parent-child tree structure. Each parent category includes a `children` array containing its child categories.
 

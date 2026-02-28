@@ -73,10 +73,10 @@ public class CategoryController {
     }
 
     /**
-     * Get hierarchical category tree for home page
+     * Get hierarchical category tree
      * Returns categories organized in parent-child structure
      */
-    @GetMapping("/home")
+    @GetMapping("/tree")
     public Flux<CategoryTreeResponse> getCategoryTree() {
         return catalogService.getCategoryTree();
     }
