@@ -7,6 +7,7 @@ COPY pom.xml .
 COPY common ./common
 COPY product-service ./product-service
 COPY search-service ./search-service
+COPY order-service ./order-service
 
 # Build all modules
 RUN mvn clean package -DskipTests
@@ -32,10 +33,10 @@ COPY --from=build /app/${MODULE_NAME}/target/*.jar app.jar
 RUN chown appuser:appuser app.jar
 USER appuser
 
-EXPOSE 8081 8083
+EXPOSE 8081 8082 8083
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8081/actuator/health || curl -f http://localhost:8083/actuator/health || exit 1
+  CMD curl -f http://localhost:${SERVER_PORT:-8081}/actuator/health || exit 1
 
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+OptimizeStringConcat"
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

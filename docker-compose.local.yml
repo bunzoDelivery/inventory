@@ -1,0 +1,33 @@
+# Local testing override - use with: docker-compose -f docker-compose.yml -f docker-compose.local.yml up
+# Uses your local MySQL (localhost) - containers reach host via host.docker.internal
+# Prerequisite: MySQL running locally on 3306 with database 'inventory', user root/root
+
+services:
+    product-service:
+        environment:
+            SPRING_PROFILES_ACTIVE: dev
+            DB_HOST: host.docker.internal
+            DB_PORT: 3306
+            DB_NAME: inventory
+            DB_USERNAME: root
+            DB_PASSWORD: root
+
+    order-service:
+        environment:
+            SPRING_PROFILES_ACTIVE: dev
+            DB_HOST: host.docker.internal
+            DB_PORT: 3306
+            DB_NAME: inventory
+            DB_USERNAME: root
+            DB_PASSWORD: root
+
+    meilisearch:
+        environment:
+            MEILI_ENV: development
+
+    search-service:
+        environment:
+            SPRING_PROFILES_ACTIVE: dev
+            DB_URL: r2dbc:mysql://host.docker.internal:3306/inventory
+            DB_USERNAME: root
+            DB_PASSWORD: root

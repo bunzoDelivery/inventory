@@ -1,9 +1,9 @@
-# Docker Compose for AWS Deployment
-# Product-service only - connects to external AWS RDS MySQL
+# Docker Compose for AWS/EC2 Deployment
+# All three services - connects to external AWS RDS MySQL
 # Set DB credentials via environment variables or .env file
 
 services:
-    # Product Service (merged from inventory + catalog services)
+    # Product Service (inventory + catalog)
     product-service:
         build:
             context: .
@@ -13,7 +13,6 @@ services:
         container_name: product-service
         environment:
             SPRING_PROFILES_ACTIVE: prod
-            # AWS RDS MySQL connection - set these via environment variables
             DB_HOST: ${DB_HOST}
             DB_PORT: ${DB_PORT:-3306}
             DB_NAME: ${DB_NAME:-inventory}
@@ -23,18 +22,113 @@ services:
         ports:
             - "8081:8081"
         healthcheck:
-            test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health" ]
+            test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
             interval: 30s
             timeout: 10s
             retries: 5
             start_period: 60s
         restart: unless-stopped
+        networks:
+            - quickcommerce-network
 
-# To run with search-service, use: docker-compose -f docker-compose.yml -f docker-compose.search.yml up
+    # Order Service
+    order-service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                MODULE_NAME: order-service
+        container_name: order-service
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            DB_HOST: ${DB_HOST}
+            DB_PORT: ${DB_PORT:-3306}
+            DB_NAME: ${DB_NAME:-inventory}
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
+            SERVER_PORT: 8082
+            PRODUCT_SERVICE_URL: http://product-service:8081
+            INVENTORY_SERVICE_URL: http://product-service:8081
+        ports:
+            - "8082:8082"
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+        restart: unless-stopped
+        depends_on:
+            product-service:
+                condition: service_healthy
+        networks:
+            - quickcommerce-network
+
+    # Search Service
+    search-service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                MODULE_NAME: search-service
+        container_name: search-service
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            DB_URL: r2dbc:mysql://${DB_HOST}:${DB_PORT:-3306}/${DB_NAME:-inventory}
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
+            SERVER_PORT: 8083
+            MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKey}
+            INVENTORY_SERVICE_URL: http://product-service:8081
+            CATALOG_SERVICE_URL: http://product-service:8081
+        ports:
+            - "8083:8083"
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+        restart: unless-stopped
+        depends_on:
+            product-service:
+                condition: service_healthy
+        networks:
+            - quickcommerce-network
+
+    # Meilisearch - Search Engine (required by search-service)
+    meilisearch:
+        image: getmeili/meilisearch:v1.9
+        container_name: meilisearch
+        environment:
+            MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKey}
+            MEILI_ENV: production
+        ports:
+            - "7700:7700"
+        volumes:
+            - meilisearch_data:/meili_data
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:7700/health" ]
+            interval: 10s
+            timeout: 3s
+            retries: 5
+            start_period: 10s
+        restart: unless-stopped
+        networks:
+            - quickcommerce-network
+
+networks:
+    quickcommerce-network:
+        driver: bridge
+
+volumes:
+    meilisearch_data:
 
 # Example .env file:
 # DB_HOST=your-rds-instance.xxxxx.us-east-1.rds.amazonaws.com
 # DB_PORT=3306
-# DB_NAME=quickcommerce
+# DB_NAME=inventory
 # DB_USERNAME=admin
 # DB_PASSWORD=your-secure-password
+# MEILI_MASTER_KEY=your-meilisearch-api-key
