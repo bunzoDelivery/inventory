@@ -76,9 +76,45 @@ curl http://localhost:8083/actuator/health
 
 #### Catalog - Categories
 
-**Get All Categories**
+**Get All Categories (Flat Structure)**
 ```bash
 GET /api/v1/catalog/categories
+```
+Returns all active categories in a flat list.
+
+**Get Category Tree (Hierarchical Structure)**
+```bash
+GET /api/v1/catalog/categories/tree
+```
+Returns all active categories organized in a hierarchical parent-child tree structure. Each parent category includes a `children` array containing its child categories.
+
+Example response:
+```json
+[
+  {
+    "id": 1,
+    "name": "Electronics",
+    "slug": "electronics",
+    "displayOrder": 1,
+    "isActive": true,
+    "children": [
+      {
+        "id": 10,
+        "name": "Mobile Phones",
+        "slug": "mobile-phones",
+        "displayOrder": 1,
+        "children": []
+      },
+      {
+        "id": 11,
+        "name": "Laptops",
+        "slug": "laptops",
+        "displayOrder": 2,
+        "children": []
+      }
+    ]
+  }
+]
 ```
 
 **Get Category by ID**

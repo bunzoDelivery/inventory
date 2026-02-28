@@ -1,6 +1,7 @@
 package com.quickcommerce.product.catalog.controller;
 
 import com.quickcommerce.product.catalog.dto.CategoryResponse;
+import com.quickcommerce.product.catalog.dto.CategoryTreeResponse;
 import com.quickcommerce.product.catalog.dto.CreateCategoryRequest;
 import com.quickcommerce.product.catalog.service.CatalogService;
 import jakarta.validation.Valid;
@@ -69,5 +70,14 @@ public class CategoryController {
     @GetMapping
     public Flux<CategoryResponse> getAllActiveCategories() {
         return catalogService.getAllActiveCategories();
+    }
+
+    /**
+     * Get hierarchical category tree
+     * Returns categories organized in parent-child structure
+     */
+    @GetMapping("/tree")
+    public Flux<CategoryTreeResponse> getCategoryTree() {
+        return catalogService.getCategoryTree();
     }
 }

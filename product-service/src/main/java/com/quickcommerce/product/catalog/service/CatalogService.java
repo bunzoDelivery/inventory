@@ -103,6 +103,58 @@ public class CatalogService {
                 .map(CategoryResponse::fromDomain);
     }
 
+    /**
+     * Get hierarchical category tree
+     * Returns all active categories organized in a parent-child tree structure
+     */
+    public Flux<CategoryTreeResponse> getCategoryTree() {
+        return categoryRepository.findAllActive()
+                .collectList()
+                .flatMapMany(categories -> {
+                    // Build a map of parent ID to children
+                    java.util.Map<Long, java.util.List<Category>> childrenMap = new java.util.HashMap<>();
+                    java.util.List<Category> rootCategories = new java.util.ArrayList<>();
+
+                    // First pass: separate roots and organize children by parent
+                    for (Category category : categories) {
+                        if (category.getParentId() == null) {
+                            rootCategories.add(category);
+                        } else {
+                            childrenMap.computeIfAbsent(category.getParentId(), k -> new java.util.ArrayList<>())
+                                    .add(category);
+                        }
+                    }
+
+                    // Second pass: build tree recursively
+                    java.util.List<CategoryTreeResponse> treeNodes = rootCategories.stream()
+                            .map(root -> buildCategoryTree(root, childrenMap))
+                            .sorted(java.util.Comparator.comparing(CategoryTreeResponse::getDisplayOrder))
+                            .toList();
+
+                    return Flux.fromIterable(treeNodes);
+                });
+    }
+
+    /**
+     * Recursively build category tree
+     */
+    private CategoryTreeResponse buildCategoryTree(Category category, 
+                                                   java.util.Map<Long, java.util.List<Category>> childrenMap) {
+        CategoryTreeResponse node = CategoryTreeResponse.fromDomain(category);
+
+        // Get children for this category
+        java.util.List<Category> children = childrenMap.get(category.getId());
+        if (children != null && !children.isEmpty()) {
+            java.util.List<CategoryTreeResponse> childNodes = children.stream()
+                    .map(child -> buildCategoryTree(child, childrenMap))
+                    .sorted(java.util.Comparator.comparing(CategoryTreeResponse::getDisplayOrder))
+                    .toList();
+            node.setChildren(childNodes);
+        }
+
+        return node;
+    }
+
     // ============ Product Operations ============
 
     /**
