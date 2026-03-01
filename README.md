@@ -1,6 +1,6 @@
 # Quick Commerce Inventory System
 
-A reactive microservice platform for managing products, inventory, and search in the Quick Commerce platform, built with Java 17 and Spring WebFlux.
+A reactive microservice platform for managing products, inventory, search, and orders in the Quick Commerce platform, built with Java 17 and Spring WebFlux.
 
 ## Overview
 
@@ -16,6 +16,13 @@ This system provides comprehensive product catalog management, real-time invento
 - **Query Preprocessing**: Trim, lowercase, collapse spaces, and key-repeat typo fix (e.g. `milkkkkkk` → `milkk`)
 - **Availability Integration**: Real-time stock status in search results
 - **Admin Controls**: Synonyms, settings (auto-bootstrap on startup), and index management
+
+### Order Service (Port 8082)
+- **Order Management**: Create, preview, cancel, and track orders
+- **Stock Reservation**: Integrates with product-service for inventory checks and reservations
+- **Order Lifecycle**: PENDING → PACKING → OUT_FOR_DELIVERY → DELIVERED
+- **Idempotency**: Optional Idempotency-Key header for safe retries
+- **Rate Limiting**: 5 order creations per customer per minute
 
 ## Technology Stack
 
@@ -65,10 +72,19 @@ SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 
 Search-service will be available on `http://localhost:8083`
 
-4. Check health:
+4. Run order-service (requires product-service):
+```bash
+cd order-service
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+```
+
+Order-service will be available on `http://localhost:8082`
+
+5. Check health:
 ```bash
 curl http://localhost:8081/actuator/health
 curl http://localhost:8083/actuator/health
+curl http://localhost:8082/actuator/health
 ```
 
 ## API Documentation
@@ -532,6 +548,130 @@ GET /actuator/metrics/search.duration
 GET /actuator/metrics/search.results
 ```
 
+### Order Service APIs
+
+Order-service runs on port 8082. Base path: `/api/v1/orders`
+
+#### Checkout
+
+**Preview Order**
+```bash
+POST /api/v1/orders/preview
+Content-Type: application/json
+
+{
+  "storeId": 1,
+  "items": [
+    { "sku": "AMUL-MILK-500ML", "qty": 2 },
+    { "sku": "PARLE-G-BISCUIT", "qty": 1 }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "storeId": 1,
+  "totalAmount": 75.00,
+  "items": [
+    {
+      "sku": "AMUL-MILK-500ML",
+      "qty": 2,
+      "unitPrice": 25.00,
+      "subTotal": 50.00,
+      "available": true
+    }
+  ],
+  "warnings": []
+}
+```
+
+**Create Order**
+```bash
+POST /api/v1/orders
+Content-Type: application/json
+Idempotency-Key: optional-unique-key-for-retries
+
+{
+  "storeId": 1,
+  "customerId": "cust-123",
+  "items": [
+    { "sku": "AMUL-MILK-500ML", "quantity": 2 },
+    { "sku": "PARLE-G-BISCUIT", "quantity": 1 }
+  ],
+  "paymentMethod": "COD",
+  "delivery": {
+    "latitude": -15.3875,
+    "longitude": 28.3228,
+    "address": "123 Main St, Lusaka",
+    "phone": "0977123456",
+    "notes": "Gate code 1234"
+  }
+}
+```
+
+**Response:** `201 Created` with `OrderResponse` (orderId, status, itemsTotal, deliveryFee, grandTotal, items, delivery, etc.)
+
+#### Query
+
+**Get Order by UUID**
+```bash
+GET /api/v1/orders/{orderUuid}
+```
+
+**Get Customer Orders**
+```bash
+GET /api/v1/orders/customer/{customerId}?page=0&size=20
+```
+
+**Get Store Orders**
+```bash
+GET /api/v1/orders/store/{storeId}?status=PENDING&page=0&size=20
+```
+
+#### Customer Actions
+
+**Cancel Order**
+```bash
+POST /api/v1/orders/{orderUuid}/cancel
+Content-Type: application/json
+Customer-Id: cust-123
+
+{
+  "reason": "Changed my mind"
+}
+```
+
+#### Dark Store Operations
+
+**Update Order Status**
+```bash
+POST /api/v1/orders/{orderUuid}/status
+Content-Type: application/json
+Actor-Id: SYSTEM
+
+{
+  "status": "PACKING",
+  "notes": "Order picked"
+}
+```
+
+Valid statuses: `PACKING`, `OUT_FOR_DELIVERY`, `DELIVERED`
+
+#### Dev / QA Only
+
+**Mock Payment**
+```bash
+POST /api/v1/orders/{orderUuid}/pay-mock
+```
+
+#### Health & Metrics
+
+**Health Check**
+```bash
+GET /actuator/health
+```
+
 ## Configuration
 
 ### Product Service Environment Variables
@@ -559,6 +699,22 @@ GET /actuator/metrics/search.results
 | `CATALOG_SERVICE_URL` | Product service URL | http://localhost:8081 |
 | `INVENTORY_SERVICE_URL` | Product service URL | http://localhost:8081 |
 | `SERVER_PORT` | Application port | 8083 |
+
+### Order Service Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_HOST` | Database host | localhost |
+| `DB_PORT` | Database port | 3306 |
+| `DB_NAME` | Database name | inventory |
+| `DB_USERNAME` | Database username | root |
+| `DB_PASSWORD` | Database password | root |
+| `PRODUCT_SERVICE_URL` | Product service URL | http://localhost:8081 |
+| `INVENTORY_SERVICE_URL` | Product service URL | http://localhost:8081 |
+| `SERVER_PORT` | Application port | 8082 |
+| `ORDER_DELIVERY_FEE` | Delivery fee (ZMW) | 15.00 |
+| `ORDER_PAYMENT_TIMEOUT_MINUTES` | Payment timeout | 15 |
+| `ORDER_CLEANUP_INTERVAL_MS` | Cleanup interval for expired orders | 60000 |
 
 ### Application Profiles
 
@@ -655,6 +811,11 @@ GET /actuator/metrics/search.results
 - `search_synonyms` - Search synonym mappings
 - `search_settings` - Search configuration
 
+**Orders** (order-service)
+- `customer_orders` - Order header with status, payment, delivery
+- `order_items` - Line items per order
+- `order_events` - Order lifecycle event log
+
 ## Development
 
 ### Running Locally
@@ -667,6 +828,10 @@ SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 
 # Search Service
 cd search-service
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+
+# Order Service (requires product-service)
+cd order-service
 SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 ```
 
@@ -687,6 +852,9 @@ mvn test
 # Specific service
 cd product-service
 mvn test
+
+cd order-service
+mvn test
 ```
 
 ### Building JAR
@@ -697,6 +865,7 @@ mvn clean package -DskipTests
 Artifacts:
 - `product-service/target/product-service-1.0.0-SNAPSHOT.jar`
 - `search-service/target/search-service-1.0.0-SNAPSHOT.jar`
+- `order-service/target/order-service-1.0.0-SNAPSHOT.jar`
 
 ### Building Docker Image
 ```bash
@@ -801,6 +970,11 @@ sudo systemctl status product-service
 - **Index Size**: 10,000+ products
 - **Refresh**: Real-time with automatic sync
 
+### Order Service
+- **Order Creation**: Rate limited (5 req/min per customer)
+- **Circuit Breaker**: Protects against product-service failures
+- **Idempotency**: Safe retries with Idempotency-Key header
+
 ## Monitoring
 
 ### Key Metrics
@@ -818,9 +992,13 @@ sudo systemctl status product-service
 - `search.errors` - Failed searches
 - `circuit.breaker.state` - Circuit breaker status
 
+**Order Service:**
+- `http.server.requests` - API request counts and latency
+- `circuit.breaker.state` - Product-service circuit breaker status
+
 ### Health Checks
 
-Both services expose:
+All services expose:
 - `/actuator/health` - Overall health
 - `/actuator/health/db` - Database connectivity
 - `/actuator/health/circuitBreakers` - Circuit breaker status
@@ -869,6 +1047,22 @@ curl -X POST http://localhost:8083/admin/search/index/rebuild \
 - Review sync response for specific error messages
 - Check product-service logs for detailed errors
 
+### Order Service Failures
+```bash
+# Ensure product-service is running (order-service depends on it)
+curl http://localhost:8081/actuator/health
+
+# Check order-service health
+curl http://localhost:8082/actuator/health
+
+# Check circuit breaker state if product-service is down
+curl http://localhost:8082/actuator/health/circuitBreakers
+```
+
+- **429 Too Many Requests**: Order creation rate limited (5/min per customer)
+- **InsufficientStockException**: Items out of stock; use preview API first
+- **ServiceUnavailableException**: Product-service unreachable; check circuit breaker
+
 ## License
 
 This project is licensed under the MIT License.
@@ -876,6 +1070,6 @@ This project is licensed under the MIT License.
 ## Support
 
 For issues and questions:
-- Check logs in `product-service/logs/` and `search-service/logs/`
+- Check logs in `product-service/logs/`, `search-service/logs/`, and `order-service/logs/`
 - Review health endpoints for service status
 - Check circuit breaker states for downstream failures

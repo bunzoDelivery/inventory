@@ -2,6 +2,9 @@ package com.quickcommerce.search.service;
 
 import com.quickcommerce.search.client.CatalogClient;
 import com.quickcommerce.search.client.InventoryClient;
+import com.quickcommerce.search.config.SearchProperties;
+import com.quickcommerce.search.dto.CatalogProductDto;
+import com.quickcommerce.search.health.SyncHealthIndicator;
 import com.quickcommerce.search.model.ProductDocument;
 import com.quickcommerce.search.provider.MeilisearchProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,18 +35,31 @@ class IndexSyncServiceTest {
     @Mock
     private MeilisearchProvider meilisearchProvider;
 
+    @Mock
+    private SearchProperties searchProperties;
+
+    @Mock
+    private SyncHealthIndicator syncHealthIndicator;
+
     @InjectMocks
     private IndexSyncService indexSyncService;
 
+    @BeforeEach
+    void setUp() {
+        SearchProperties.Sync sync = new SearchProperties.Sync();
+        sync.setBatchSize(50);
+        when(searchProperties.getSync()).thenReturn(sync);
+    }
+
     @Test
     void syncAllProducts_shouldFetchAndUpsertInBatches() {
-        // Arrange
-        ProductDocument p1 = ProductDocument.builder().id(1L).build();
-        ProductDocument p2 = ProductDocument.builder().id(2L).build();
-        // Create enough documents to test batching if needed, but for unit test simple
-        // flow is fine
+        // Arrange: CatalogClient returns CatalogProductDto; mapper converts to ProductDocument
+        CatalogProductDto dto1 = new CatalogProductDto();
+        dto1.setId(1L);
+        CatalogProductDto dto2 = new CatalogProductDto();
+        dto2.setId(2L);
 
-        when(catalogClient.getAllProducts()).thenReturn(Flux.just(p1, p2));
+        when(catalogClient.getAllProducts()).thenReturn(Flux.just(dto1, dto2));
         when(meilisearchProvider.upsertDocuments(anyList())).thenReturn(Mono.empty());
         when(inventoryClient.getStoresForProducts(anyList())).thenReturn(Mono.just(Map.of()));
 
@@ -75,13 +91,8 @@ class IndexSyncServiceTest {
 
     @Test
     void syncAllProducts_shouldContinueOnError() {
-        // Test robustness - if one batch fails, should we stop?
-        // Current implementation propagates error. Let's verify that behavior or fix
-        // it.
-        // The service uses buffer().flatMap(), so error in flux terminates it.
-
+        // When catalog returns error, sync propagates it (never reaches getStoresForProducts)
         when(catalogClient.getAllProducts()).thenReturn(Flux.error(new RuntimeException("Catalog Down")));
-        when(inventoryClient.getStoresForProducts(anyList())).thenReturn(Mono.just(Map.of()));
 
         Mono<Integer> result = indexSyncService.syncAllProducts();
 

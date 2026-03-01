@@ -26,6 +26,12 @@ public class ProductDocument {
     private Long id;
 
     /**
+     * Stock Keeping Unit
+     */
+    @JsonProperty("sku")
+    private String sku;
+
+    /**
      * Product name
      */
     @JsonProperty("name")
@@ -100,16 +106,16 @@ public class ProductDocument {
     private String unitText;
 
     /**
-     * Product image URL (first image from images JSON)
+     * Product slug (URL-friendly identifier)
      */
-    @JsonProperty("imageUrl")
-    private String imageUrl;
+    @JsonProperty("slug")
+    private String slug;
 
     /**
-     * Product page URL
+     * Product images (full JSON array string from catalog)
      */
-    @JsonProperty("productUrl")
-    private String productUrl;
+    @JsonProperty("images")
+    private String images;
 
     /**
      * Search priority (0-100, higher = better)

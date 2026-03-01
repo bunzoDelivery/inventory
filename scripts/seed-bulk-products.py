@@ -29,6 +29,64 @@ BASE_URL = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PRODUCT_SERVICE
 STORE_ID = int(os.environ.get("STORE_ID", "1"))
 API_URL = f"{BASE_URL}/api/v1/catalog/products/sync"
 
+# Category ID -> list of Unsplash image URLs for products in that category
+CATEGORY_IMAGES = {
+    11: ["https://images.unsplash.com/photo-1619566636858-adf3ef46400b", "https://images.unsplash.com/photo-1528825871115-3581a5387919", "https://images.unsplash.com/photo-1597362925123-8d979f6a4567"],  # Fresh Fruits
+    12: ["https://images.unsplash.com/photo-1597362925123-77861d3fbac7", "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1", "https://images.unsplash.com/photo-1540420773420-3366772f4994"],  # Fresh Vegetables
+    13: ["https://images.unsplash.com/photo-1528825871115-3581a5387919", "https://images.unsplash.com/photo-1585059895524-72359e06133a", "https://images.unsplash.com/photo-1585059895524-72359e06133a"],  # Exotic Fruits
+    14: ["https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1", "https://images.unsplash.com/photo-1512621776951-a57141f2eefd", "https://images.unsplash.com/photo-1540420773420-3366772f4994"],  # Leafy Greens
+    15: ["https://images.unsplash.com/photo-1488459716781-31db52582fe9", "https://images.unsplash.com/photo-1619566636858-adf3ef46400b", "https://images.unsplash.com/photo-1597362925123-77861d3fbac7"],  # Organic Produce
+    16: ["https://images.unsplash.com/photo-1563636619-e9143da7973b", "https://images.unsplash.com/photo-1550583724-b2692b85b150", "https://images.unsplash.com/photo-1550583724-b2692b85b150"],  # Milk
+    17: ["https://images.unsplash.com/photo-1509440159596-0249088772ff", "https://images.unsplash.com/photo-1549931319-a545dcf3bc73", "https://images.unsplash.com/photo-1509440159596-0249088772ff"],  # Bread & Pav
+    18: ["https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f", "https://images.unsplash.com/photo-1569127959161-3b6bb32f8e6c", "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f"],  # Eggs
+    19: ["https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d", "https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d", "https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d"],  # Butter & Ghee
+    20: ["https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d", "https://images.unsplash.com/photo-1452195100486-9cc805987862", "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d"],  # Cheese
+    21: ["https://images.unsplash.com/photo-1631452180519-c014fe946bc7", "https://images.unsplash.com/photo-1541529086526-db283c563270", "https://images.unsplash.com/photo-1631452180519-c014fe946bc7"],  # Paneer & Tofu
+    22: ["https://images.unsplash.com/photo-1488477181946-6428a0291777", "https://images.unsplash.com/photo-1571212515416-ffe4b2d2a119", "https://images.unsplash.com/photo-1488477181946-6428a0291777"],  # Yogurt & Curd
+    23: ["https://images.unsplash.com/photo-1621939514649-280e2ee25f60", "https://images.unsplash.com/photo-1526318896980-cf78ec0887c3", "https://images.unsplash.com/photo-1621939514649-280e2ee25f60"],  # Breakfast Cereals
+    24: ["https://images.unsplash.com/photo-1581006852262-e4307cf6283a", "https://images.unsplash.com/photo-1554866585-cd94860890b7", "https://images.unsplash.com/photo-1581006852262-e4307cf6283a"],  # Soft Drinks
+    25: ["https://images.unsplash.com/photo-1600271886742-f049cd451bba", "https://images.unsplash.com/photo-1621506289937-a8e4df240d0b", "https://images.unsplash.com/photo-1600271886742-f049cd451bba"],  # Juices
+    26: ["https://images.unsplash.com/photo-1544787219-7f47ccb76574", "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085", "https://images.unsplash.com/photo-1544787219-7f47ccb76574"],  # Tea & Coffee
+    27: ["https://images.unsplash.com/photo-1622483767028-3f66f32aef97", "https://images.unsplash.com/photo-1554866585-cd94860890b7", "https://images.unsplash.com/photo-1622483767028-3f66f32aef97"],  # Energy Drinks
+    28: ["https://images.unsplash.com/photo-1548839140-29a749e1cf4d", "https://images.unsplash.com/photo-1548839140-29a749e1cf4d", "https://images.unsplash.com/photo-1548839140-29a749e1cf4d"],  # Water
+    29: ["https://images.unsplash.com/photo-1517466787929-bc90951d0974", "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b", "https://images.unsplash.com/photo-1517466787929-bc90951d0974"],  # Health Drinks
+    30: ["https://images.unsplash.com/photo-1566478989037-eec170784d0b", "https://images.unsplash.com/photo-1566478989037-eec170784d0b", "https://images.unsplash.com/photo-1566478989037-eec170784d0b"],  # Chips & Crisps
+    31: ["https://images.unsplash.com/photo-1558961363-fa8fdf82db35", "https://images.unsplash.com/photo-1558961363-fa8fdf82db35", "https://images.unsplash.com/photo-1558961363-fa8fdf82db35"],  # Biscuits & Cookies
+    32: ["https://images.unsplash.com/photo-1551892374-ecf8754cf8b0", "https://images.unsplash.com/photo-1569718212165-3a24449bc0a8", "https://images.unsplash.com/photo-1551892374-ecf8754cf8b0"],  # Noodles & Pasta
+    33: ["https://images.unsplash.com/photo-1609501676725-7186f017a4b7", "https://images.unsplash.com/photo-1585032226651-759b368d7246", "https://images.unsplash.com/photo-1609501676725-7186f017a4b7"],  # Ready to Eat
+    34: ["https://images.unsplash.com/photo-1481391319762-47dff72954d9", "https://images.unsplash.com/photo-1511381939415-e44015466834", "https://images.unsplash.com/photo-1481391319762-47dff72954d9"],  # Chocolates & Candies
+    35: ["https://images.unsplash.com/photo-1601524909162-ae8725290836", "https://images.unsplash.com/photo-1601524909162-ae8725290836", "https://images.unsplash.com/photo-1601524909162-ae8725290836"],  # Namkeen & Mixtures
+    36: ["https://images.unsplash.com/photo-1600857062241-98e5dba60f2f", "https://images.unsplash.com/photo-1600857062241-98e5dba60f2f", "https://images.unsplash.com/photo-1600857062241-98e5dba60f2f"],  # Soaps & Body Wash
+    37: ["https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d", "https://images.unsplash.com/photo-1522338242992-e1a54906a8da", "https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d"],  # Hair Care
+    38: ["https://images.unsplash.com/photo-1607613009820-a29f7bb81c04", "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04", "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04"],  # Oral Care
+    39: ["https://images.unsplash.com/photo-1556228578-8c89e6adf883", "https://images.unsplash.com/photo-1556228578-8c89e6adf883", "https://images.unsplash.com/photo-1556228578-8c89e6adf883"],  # Skin Care
+    40: ["https://images.unsplash.com/photo-1621607512214-68297480165e", "https://images.unsplash.com/photo-1621607512214-68297480165e", "https://images.unsplash.com/photo-1621607512214-68297480165e"],  # Men's Grooming
+    41: ["https://images.unsplash.com/photo-1583947581924-860bda6a26df", "https://images.unsplash.com/photo-1583947581924-860bda6a26df", "https://images.unsplash.com/photo-1583947581924-860bda6a26df"],  # Feminine Hygiene
+    42: ["https://images.unsplash.com/photo-1571875257727-256c39da42af", "https://images.unsplash.com/photo-1571875257727-256c39da42af", "https://images.unsplash.com/photo-1571875257727-256c39da42af"],  # Deodorants
+    43: ["https://images.unsplash.com/photo-1610557892470-55d9e80c0bce", "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce", "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce"],  # Detergents & Fabric Care
+    44: ["https://images.unsplash.com/photo-1563453392212-326f5e854473", "https://images.unsplash.com/photo-1563453392212-326f5e854473", "https://images.unsplash.com/photo-1563453392212-326f5e854473"],  # Cleaning Supplies
+    45: ["https://images.unsplash.com/photo-1600353068440-6361ef3a86e8", "https://images.unsplash.com/photo-1600353068440-6361ef3a86e8", "https://images.unsplash.com/photo-1600353068440-6361ef3a86e8"],  # Dishwashing
+    46: ["https://images.unsplash.com/photo-1625667626161-d18df8b36968", "https://images.unsplash.com/photo-1625667626161-d18df8b36968", "https://images.unsplash.com/photo-1625667626161-d18df8b36968"],  # Disposables & Garbage Bags
+    47: ["https://images.unsplash.com/photo-1585128723678-e40485025c46", "https://images.unsplash.com/photo-1585128723678-e40485025c46", "https://images.unsplash.com/photo-1585128723678-e40485025c46"],  # Air Fresheners
+    48: ["https://images.unsplash.com/photo-1551030173-122aabc4489c", "https://images.unsplash.com/photo-1551030173-122aabc4489c", "https://images.unsplash.com/photo-1551030173-122aabc4489c"],  # Batteries & Bulbs
+    49: ["https://images.unsplash.com/photo-1617788138017-80ad40651399", "https://images.unsplash.com/photo-1617788138017-80ad40651399", "https://images.unsplash.com/photo-1617788138017-80ad40651399"],  # Diapers & Wipes
+    50: ["https://images.unsplash.com/photo-1598639279843-644def8d82ad", "https://images.unsplash.com/photo-1598639279843-644def8d82ad", "https://images.unsplash.com/photo-1598639279843-644def8d82ad"],  # Baby Food
+    51: ["https://images.unsplash.com/photo-1612349317150-e413f6a5b16d", "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d", "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d"],  # Baby Bath & Skin Care
+    52: ["https://images.unsplash.com/photo-1596461404969-9ae70f2830c1", "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1", "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1"],  # Baby Accessories
+    53: ["https://images.unsplash.com/photo-1587593810167-a84920ea0781", "https://images.unsplash.com/photo-1587593810167-a84920ea0781", "https://images.unsplash.com/photo-1587593810167-a84920ea0781"],  # Chicken & Poultry
+    54: ["https://images.unsplash.com/photo-1602470520998-f4a52199a3d6", "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6", "https://images.unsplash.com/photo-1602470520998-f4a52199a3d6"],  # Mutton & Lamb
+    55: ["https://images.unsplash.com/photo-1535591273668-578e31182c4f", "https://images.unsplash.com/photo-1535591273668-578e31182c4f", "https://images.unsplash.com/photo-1535591273668-578e31182c4f"],  # Fish & Seafood
+    56: ["https://images.unsplash.com/photo-1539274989475-c75edd2f81c9", "https://images.unsplash.com/photo-1539274989475-c75edd2f81c9", "https://images.unsplash.com/photo-1539274989475-c75edd2f81c9"],  # Sausages & Cold Cuts
+    57: ["https://images.unsplash.com/photo-1578985545062-69928b1d9587", "https://images.unsplash.com/photo-1578985545062-69928b1d9587", "https://images.unsplash.com/photo-1578985545062-69928b1d9587"],  # Cakes & Pastries
+    58: ["https://images.unsplash.com/photo-1499636136210-6f4ee915583e", "https://images.unsplash.com/photo-1499636136210-6f4ee915583e", "https://images.unsplash.com/photo-1499636136210-6f4ee915583e"],  # Cookies & Biscuits
+    59: ["https://images.unsplash.com/photo-1549931319-a545dcf3bc73", "https://images.unsplash.com/photo-1549931319-a545dcf3bc73", "https://images.unsplash.com/photo-1549931319-a545dcf3bc73"],  # Bread & Rolls
+    60: ["https://images.unsplash.com/photo-1513104890138-7c749659a591", "https://images.unsplash.com/photo-1513104890138-7c749659a591", "https://images.unsplash.com/photo-1513104890138-7c749659a591"],  # Pizza & Burger Buns
+    61: ["https://images.unsplash.com/photo-1563805042-7684c019e1cb", "https://images.unsplash.com/photo-1563805042-7684c019e1cb", "https://images.unsplash.com/photo-1563805042-7684c019e1cb"],  # Ice Cream & Desserts
+    62: ["https://images.unsplash.com/photo-1506617420156-8e4536971650", "https://images.unsplash.com/photo-1506617420156-8e4536971650", "https://images.unsplash.com/photo-1506617420156-8e4536971650"],  # Frozen Vegetables
+    63: ["https://images.unsplash.com/photo-1630367462565-a355ddd6b3d8", "https://images.unsplash.com/photo-1630367462565-a355ddd6b3d8", "https://images.unsplash.com/photo-1630367462565-a355ddd6b3d8"],  # Frozen Snacks
+    64: ["https://images.unsplash.com/photo-1603894584373-5ac82b2ae398", "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398", "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398"],  # Frozen Non-Veg
+}
+
 # Products: (sku, name, categoryId, basePrice, unitOfMeasure, currentStock, brand, packageSize)
 PRODUCTS = [
     # Fresh Fruits (11) - 8 products
@@ -327,8 +385,16 @@ PRODUCTS = [
 
 def build_items():
     items = []
+    cat_product_index = {}  # track product index per category for cycling images
     for p in PRODUCTS:
         sku, name, cat_id, price, uom, stock, brand, pkg = p
+        # Pick image from category pool (cycle through if multiple products in same category)
+        img_list = CATEGORY_IMAGES.get(cat_id, ["https://images.unsplash.com/photo-1556742049-0cfed4f6a45d"])
+        idx = cat_product_index.get(cat_id, 0) % len(img_list)
+        cat_product_index[cat_id] = cat_product_index.get(cat_id, 0) + 1
+        image_url = img_list[idx]
+        images_json = json.dumps({"front": image_url, "back": None, "side": None})
+
         items.append({
             "sku": sku,
             "name": name,
@@ -338,6 +404,7 @@ def build_items():
             "currentStock": int(stock),
             "brand": brand,
             "packageSize": pkg,
+            "images": images_json,
             "isActive": True
         })
     return items

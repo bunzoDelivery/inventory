@@ -244,19 +244,21 @@ public class SearchService {
     }
 
     /**
-     * Convert ProductDocument to ProductResult DTO
+     * Convert ProductDocument to ProductResult DTO (catalog-aligned)
      */
     private List<ProductResult> convertToProductResults(List<ProductDocument> documents) {
         return documents.stream()
                 .map(doc -> ProductResult.builder()
                         .productId(doc.getId())
+                        .sku(doc.getSku())
                         .name(doc.getName())
                         .brand(doc.getBrand())
-                        .category(doc.getCategoryName())
-                        .unitText(doc.getUnitText())
-                        .price(doc.getPrice())
-                        .imageUrl(doc.getImageUrl())
-                        .productUrl(doc.getProductUrl())
+                        .categoryId(doc.getCategoryId())
+                        .basePrice(doc.getPrice())
+                        .unitOfMeasure(doc.getUnitOfMeasure())
+                        .packageSize(doc.getUnitText())
+                        .images(doc.getImages())
+                        .slug(doc.getSlug())
                         .inStock(true) // All results are in-stock after filtering
                         .build())
                 .collect(Collectors.toList());

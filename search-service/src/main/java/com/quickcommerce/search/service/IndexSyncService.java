@@ -4,6 +4,7 @@ import com.quickcommerce.search.client.CatalogClient;
 import com.quickcommerce.search.client.InventoryClient;
 import com.quickcommerce.search.config.SearchProperties;
 import com.quickcommerce.search.health.SyncHealthIndicator;
+import com.quickcommerce.search.mapper.ProductDocumentMapper;
 import com.quickcommerce.search.model.ProductDocument;
 import com.quickcommerce.search.provider.MeilisearchProvider;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class IndexSyncService {
         int batchSize = searchProperties.getSync().getBatchSize();
 
         return catalogClient.getAllProducts()
+            .map(ProductDocumentMapper::toProductDocument)
             .collectList()
             .flatMap(allProducts -> {
                 log.info("Fetched {} products from catalog, enriching with inventory data...", allProducts.size());

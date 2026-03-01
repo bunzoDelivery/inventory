@@ -1,14 +1,14 @@
 package com.quickcommerce.search.client;
 
-import com.quickcommerce.search.model.ProductDocument;
-
+import com.quickcommerce.search.dto.CatalogProductDto;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 
 /**
  * Client interface for Catalog Service
- * Fetches product data for fallback and indexing
+ * Fetches product data for fallback and indexing.
+ * Returns CatalogProductDto (catalog API contract); callers map to ProductDocument.
  */
 public interface CatalogClient {
 
@@ -17,9 +17,9 @@ public interface CatalogClient {
      *
      * @param storeId Store ID
      * @param limit   Number of products to fetch
-     * @return Mono of List of bestseller products
+     * @return Mono of List of catalog products
      */
-    Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit);
+    Mono<List<CatalogProductDto>> getBestsellers(Long storeId, int limit);
 
     /**
      * Get products by category
@@ -28,13 +28,13 @@ public interface CatalogClient {
      * @param limit      Number of products to fetch
      * @return Mono of List of products in category
      */
-    Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit);
+    Mono<List<CatalogProductDto>> getProductsByCategory(Long categoryId, int limit);
 
     /**
      * Get all products from catalog
      * Used for bulk indexing
      *
-     * @return Flux of ProductDocument
+     * @return Flux of catalog products
      */
-    reactor.core.publisher.Flux<ProductDocument> getAllProducts();
+    reactor.core.publisher.Flux<CatalogProductDto> getAllProducts();
 }

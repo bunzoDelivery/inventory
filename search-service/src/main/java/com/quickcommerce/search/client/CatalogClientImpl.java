@@ -1,6 +1,6 @@
 package com.quickcommerce.search.client;
 
-import com.quickcommerce.search.model.ProductDocument;
+import com.quickcommerce.search.dto.CatalogProductDto;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,7 @@ public class CatalogClientImpl implements CatalogClient {
         }
 
         @Override
-        public Mono<List<ProductDocument>> getBestsellers(Long storeId, int limit) {
+        public Mono<List<CatalogProductDto>> getBestsellers(Long storeId, int limit) {
                 log.debug("Getting {} bestsellers for store {} from {} (CB: {})",
                                 limit, storeId, catalogServiceUrl, circuitBreaker.getState());
 
@@ -53,7 +53,7 @@ public class CatalogClientImpl implements CatalogClient {
                                                 .queryParam("limit", limit)
                                                 .build())
                                 .retrieve()
-                                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
+                                .bodyToMono(new ParameterizedTypeReference<List<CatalogProductDto>>() {
                                 })
                                 .timeout(timeout)
                                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
@@ -68,7 +68,7 @@ public class CatalogClientImpl implements CatalogClient {
         }
 
         @Override
-        public Mono<List<ProductDocument>> getProductsByCategory(Long categoryId, int limit) {
+        public Mono<List<CatalogProductDto>> getProductsByCategory(Long categoryId, int limit) {
                 log.debug("Getting {} products from category {} from {} (CB: {})",
                                 limit, categoryId, catalogServiceUrl, circuitBreaker.getState());
 
@@ -79,7 +79,7 @@ public class CatalogClientImpl implements CatalogClient {
                                                 .queryParam("limit", limit)
                                                 .build(categoryId))
                                 .retrieve()
-                                .bodyToMono(new ParameterizedTypeReference<List<ProductDocument>>() {
+                                .bodyToMono(new ParameterizedTypeReference<List<CatalogProductDto>>() {
                                 })
                                 .timeout(timeout)
                                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
@@ -95,14 +95,14 @@ public class CatalogClientImpl implements CatalogClient {
         }
 
         @Override
-        public reactor.core.publisher.Flux<ProductDocument> getAllProducts() {
+        public reactor.core.publisher.Flux<CatalogProductDto> getAllProducts() {
                 log.info("Fetching all products from available catalog: {} (CB: {})", 
                         catalogServiceUrl, circuitBreaker.getState());
                 return webClient
                                 .get()
                                 .uri("/api/v1/catalog/products/all")
                                 .retrieve()
-                                .bodyToFlux(ProductDocument.class)
+                                .bodyToFlux(CatalogProductDto.class)
                                 .timeout(Duration.ofSeconds(60))
                                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                                 .onErrorResume(e -> {

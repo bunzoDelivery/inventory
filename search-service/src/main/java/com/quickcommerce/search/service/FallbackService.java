@@ -1,6 +1,7 @@
 package com.quickcommerce.search.service;
 
 import com.quickcommerce.search.client.CatalogClient;
+import com.quickcommerce.search.mapper.ProductDocumentMapper;
 import com.quickcommerce.search.model.ProductDocument;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Service for handling zero-results fallback
@@ -35,8 +37,10 @@ public class FallbackService {
     public Mono<List<ProductDocument>> getFallbackResults(String query, Long storeId) {
         log.info("Getting fallback results for query: '{}', storeId: {}", query, storeId);
 
-        // Fetch bestsellers as fallback
+        // Fetch bestsellers as fallback, map to ProductDocument
         return catalogClient.getBestsellers(storeId, 20)
+                .map(dtos -> dtos == null ? List.<ProductDocument>of() :
+                        dtos.stream().map(ProductDocumentMapper::toProductDocument).collect(Collectors.toList()))
                 .doOnSuccess(bestsellers -> {
                     if (bestsellers == null || bestsellers.isEmpty()) {
                         log.warn("No fallback results available from catalog client");

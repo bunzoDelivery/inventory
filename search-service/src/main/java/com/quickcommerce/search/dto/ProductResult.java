@@ -8,7 +8,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 /**
- * Individual product result in search response
+ * Individual product result in search response.
+ * Aligned with ProductResponse (catalog API) for consistency.
  */
 @Data
 @Builder
@@ -22,6 +23,11 @@ public class ProductResult {
     private Long productId;
 
     /**
+     * Stock Keeping Unit
+     */
+    private String sku;
+
+    /**
      * Product name
      */
     private String name;
@@ -32,32 +38,37 @@ public class ProductResult {
     private String brand;
 
     /**
-     * Category name
+     * Category ID
      */
-    private String category;
+    private Long categoryId;
 
     /**
-     * Unit text (e.g., "1L", "500g")
+     * Base price
      */
-    private String unitText;
+    private BigDecimal basePrice;
 
     /**
-     * Product price
+     * Unit of measure (e.g., "kg", "L", "piece")
      */
-    private BigDecimal price;
+    private String unitOfMeasure;
 
     /**
-     * Product image URL
+     * Package size (e.g., "1L", "500g")
      */
-    private String imageUrl;
+    private String packageSize;
 
     /**
-     * Product page URL
+     * Product images (full JSON array string, same as catalog)
      */
-    private String productUrl;
+    private String images;
 
     /**
-     * Stock availability flag
+     * Product slug (URL-friendly identifier)
+     */
+    private String slug;
+
+    /**
+     * Stock availability flag (search-specific)
      */
     private Boolean inStock;
 }

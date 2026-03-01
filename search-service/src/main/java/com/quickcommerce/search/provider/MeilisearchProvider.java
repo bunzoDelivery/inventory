@@ -58,8 +58,8 @@ public class MeilisearchProvider {
                     .limit(pageSize)
                     .filter(new String[] { buildFilter(storeId) })
                     .attributesToRetrieve(new String[] {
-                        "id", "name", "brand", "categoryName", "unitText", 
-                        "price", "imageUrl", "productUrl", "isActive"
+                        "id", "sku", "name", "brand", "categoryId", "categoryName", "unitText", 
+                        "price", "unitOfMeasure", "images", "slug", "isActive"
                     })
                     .build();
 
