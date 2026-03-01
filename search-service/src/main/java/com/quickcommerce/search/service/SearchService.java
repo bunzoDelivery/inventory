@@ -145,12 +145,27 @@ public class SearchService {
     }
 
     /**
-     * Normalizes query string
+     * Normalizes query string with MVP-friendly preprocessing.
+     * - Trims leading/trailing whitespace
+     * - Collapses multiple spaces to single space
+     * - Lowercases for case-insensitive matching
+     * - Collapses 3+ consecutive identical letters to 2 (key-repeat typo fix)
+     *   Only letters are affected; digits, hyphens, and special chars (7Up, Coca-Cola, 500ml) are preserved.
      */
     private String normalizeQuery(String query) {
         if (query == null)
             return "";
-        return query.trim().toLowerCase();
+        String s = query.trim();
+        if (s.isEmpty())
+            return "";
+        // Collapse multiple spaces to single space (safe for tokenization)
+        s = s.replaceAll("\\s+", " ");
+        // Lowercase (existing behavior)
+        s = s.toLowerCase();
+        // Collapse 3+ consecutive identical letters to 2 (key-repeat typo fix)
+        // Only letters - preserves digits, hyphens, special chars (7Up, Coca-Cola, C#)
+        s = s.replaceAll("([a-zA-Z])\\1{2,}", "$1$1");
+        return s.trim();
     }
 
     /**

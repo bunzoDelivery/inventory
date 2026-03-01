@@ -13,6 +13,7 @@ This system provides comprehensive product catalog management, real-time invento
 
 ### Search Service (Port 8083)
 - **Intelligent Search**: Powered by Meilisearch with relevance ranking
+- **Query Preprocessing**: Trim, lowercase, collapse spaces, and key-repeat typo fix (e.g. `milkkkkkk` → `milkk`)
 - **Availability Integration**: Real-time stock status in search results
 - **Admin Controls**: Synonyms, settings (auto-bootstrap on startup), and index management
 
@@ -585,6 +586,7 @@ GET /actuator/metrics/search.results
 
 ### Search Integration
 - **Sequential startup**: Index creation → settings bootstrap → config sync → product sync
+- **Query preprocessing**: Trim, lowercase, collapse multiple spaces, and collapse 3+ repeated letters (key-repeat typo fix). Digits and special chars (7Up, Coca-Cola, 500ml) are preserved.
 - Auto-bootstraps default settings (ranking rules, searchable/filterable/sortable attributes) if DB is empty
 - Store-aware search with inventory filtering
 - Synonym support for better matches
@@ -625,6 +627,7 @@ GET /actuator/metrics/search.results
 
 ### Search
 - ✅ Full-text search with relevance ranking
+- ✅ Query preprocessing (trim, lowercase, collapse spaces, key-repeat typo fix)
 - ✅ Store-specific inventory filtering
 - ✅ Real-time availability integration
 - ✅ Fallback to bestsellers when no results

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meilisearch.sdk.model.Settings;
 import com.meilisearch.sdk.model.TaskInfo;
+import com.meilisearch.sdk.model.TypoTolerance;
 import com.quickcommerce.search.entity.SearchSetting;
 import com.quickcommerce.search.entity.SearchSynonym;
 import com.quickcommerce.search.provider.MeilisearchProvider;
@@ -204,6 +205,7 @@ public class SearchConfigurationService {
             // Apply known settings from DB
             return applyAllSettings(settings)
                 .then(Mono.fromCallable(() -> {
+                    applyTypoToleranceForShortWords(settings);
                     log.info("Pushing configuration to Meilisearch: {} synonyms, settings applied.", synonymsMap.size());
                     return meilisearchProvider.updateSettingsBlocking(settings);
                 }).subscribeOn(Schedulers.boundedElastic()));
@@ -274,5 +276,19 @@ public class SearchConfigurationService {
      */
     private String[] convertJsonToStringArray(String jsonValue) throws JsonProcessingException {
         return objectMapper.readValue(jsonValue, String[].class);
+    }
+
+    /**
+     * Apply typo tolerance for short words (e.g. "milk" 4 chars).
+     * Default Meilisearch requires 5+ chars for one typo - we lower to 4 so "milc" matches "milk".
+     */
+    private void applyTypoToleranceForShortWords(Settings settings) {
+        TypoTolerance typoTolerance = new TypoTolerance();
+        typoTolerance.setEnabled(true);
+        Map<String, Integer> minWordSize = new HashMap<>();
+        minWordSize.put("oneTypo", 4);   // Allow 1 typo for words 4+ chars
+        minWordSize.put("twoTypos", 8);  // Allow 2 typos for words 8+ chars
+        typoTolerance.setMinWordSizeForTypos(new HashMap<>(minWordSize));
+        settings.setTypoTolerance(typoTolerance);
     }
 }

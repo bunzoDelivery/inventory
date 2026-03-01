@@ -64,6 +64,19 @@ curl -X POST http://localhost:8083/search \
   -d '{"query":"amul","storeId":1,"page":1,"pageSize":10}'
 ```
 
+## Query Preprocessing
+
+Search queries are preprocessed before being sent to Meilisearch:
+
+| Step | Action | Example |
+|------|--------|---------|
+| Trim | Remove leading/trailing whitespace | `"  milk  "` → `"milk"` |
+| Collapse spaces | Multiple spaces → single space | `"milk  milk"` → `"milk milk"` |
+| Lowercase | Case-insensitive matching | `"MILK"` → `"milk"` |
+| Collapse repeated letters | 3+ identical letters → 2 (key-repeat typo fix) | `"milkkkkkk"` → `"milkk"` |
+
+**Preserved:** Digits, hyphens, and special characters are left unchanged (e.g. `7Up`, `Coca-Cola`, `500ml`). Only letter repetitions are collapsed.
+
 ## Admin Endpoints
 
 All admin endpoints require HTTP Basic auth: `admin:admin123`

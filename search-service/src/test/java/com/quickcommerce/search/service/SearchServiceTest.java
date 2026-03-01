@@ -5,6 +5,7 @@ import com.meilisearch.sdk.model.SearchResult;
 import com.quickcommerce.search.client.InventoryClient;
 import com.quickcommerce.search.config.SearchProperties;
 import com.quickcommerce.search.dto.AvailabilityResponse;
+import com.quickcommerce.search.metrics.SearchMetrics;
 import com.quickcommerce.search.dto.SearchRequest;
 import com.quickcommerce.search.dto.SearchResponse;
 import com.quickcommerce.search.model.ProductDocument;
@@ -37,6 +38,9 @@ class SearchServiceTest {
 
         @Mock
         private SearchProperties searchProperties;
+
+        @Mock
+        private SearchMetrics searchMetrics;
 
         @Mock
         private ObjectMapper objectMapper;
@@ -163,5 +167,41 @@ class SearchServiceTest {
                                                                                                    // empty
                                 })
                                 .verifyComplete();
+        }
+
+        @Test
+        void search_shouldPreprocessQuery_beforeCallingMeilisearch() {
+                // Arrange: query with key-repeat typo and extra spaces
+                SearchRequest request = SearchRequest.builder()
+                                .query("  milkkkkkk  ")
+                                .storeId(1L)
+                                .page(1)
+                                .pageSize(10)
+                                .build();
+
+                when(meilisearchProvider.search(anyString(), anyLong(), anyInt(), anyInt()))
+                                .thenReturn(Mono.just(searchResult));
+
+                ArrayList<HashMap<String, Object>> hits = new ArrayList<>();
+                HashMap<String, Object> hit = new HashMap<>();
+                hit.put("id", 100);
+                hits.add(hit);
+                when(searchResult.getHits()).thenReturn(hits);
+                when(searchResult.getEstimatedTotalHits()).thenReturn(1);
+                when(objectMapper.convertValue(anyMap(), eq(ProductDocument.class))).thenReturn(productDoc);
+
+                AvailabilityResponse availResponse = AvailabilityResponse.builder()
+                                .storeId(1L)
+                                .availability(Map.of(100L, true))
+                                .build();
+                when(inventoryClient.checkAvailability(anyLong(), anyList()))
+                                .thenReturn(Mono.just(availResponse));
+                when(rankingService.rank(anyList())).thenReturn(List.of(productDoc));
+
+                // Act
+                searchService.search(request).block();
+
+                // Assert: Meilisearch called with preprocessed query (trimmed, lowercased, repeated letters collapsed)
+                verify(meilisearchProvider).search(eq("milkk"), eq(1L), eq(1), eq(10));
         }
 }
