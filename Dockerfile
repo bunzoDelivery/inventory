@@ -31,6 +31,7 @@ COPY --from=build /app/${MODULE_NAME}/target/*.jar app.jar
 
 # Change ownership and switch user
 RUN chown appuser:appuser app.jar
+RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
 USER appuser
 
 EXPOSE 8081 8082 8083

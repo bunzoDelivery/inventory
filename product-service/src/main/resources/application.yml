@@ -77,7 +77,13 @@ logging:
     io.r2dbc.mysql: DEBUG
     org.flywaydb: DEBUG
   file:
-    name: ./logs/product-service-dev.log
+    name: ./logs/product-service.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+      file-name-pattern: ${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz
 
 # Inventory Configuration
 inventory:

@@ -62,5 +62,13 @@ logging:
   level:
     root: INFO
     com.quickcommerce.search: DEBUG
+  file:
+    name: ./logs/search-service.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+      file-name-pattern: ${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz
