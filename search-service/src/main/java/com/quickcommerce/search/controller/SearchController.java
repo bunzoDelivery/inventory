@@ -36,7 +36,8 @@ public class SearchController {
      * {
      * "query": "milk",
      * "storeId": 1,
-     * "limit": 20
+     * "page": 1,
+     * "pageSize": 20
      * }
      *
      * @param request Search request

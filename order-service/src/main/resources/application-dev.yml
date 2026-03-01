@@ -1,18 +1,19 @@
+# Uses env vars for Docker compatibility (DB_HOST=host.docker.internal when in containers)
 spring:
   r2dbc:
-    url: r2dbc:mysql://localhost:3306/inventory
-    username: root
-    password: root
+    url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
   flyway:
-    url: jdbc:mysql://localhost:3306/inventory
-    user: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    user: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
 
 client:
   product-service:
-    url: http://localhost:8081
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8081}
   inventory-service:
-    url: http://localhost:8081
+    url: ${INVENTORY_SERVICE_URL:http://localhost:8081}
 
 logging:
   level:

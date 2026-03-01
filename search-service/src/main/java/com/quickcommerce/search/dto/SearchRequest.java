@@ -44,10 +44,4 @@ public class SearchRequest {
     @Max(value = 100, message = "Page size cannot exceed 100")
     @Builder.Default
     private Integer pageSize = 20;
-
-    /**
-     * @deprecated Use pageSize instead
-     */
-    @Deprecated
-    private Integer limit; // Retain for backward compat, mapped to pageSize in service
 }

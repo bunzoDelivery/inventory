@@ -8,12 +8,9 @@ import com.quickcommerce.search.model.ProductDocument;
 import com.quickcommerce.search.provider.MeilisearchProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -35,45 +32,6 @@ public class IndexSyncService {
     private final MeilisearchProvider meilisearchProvider;
     private final SearchProperties searchProperties;
     private final SyncHealthIndicator syncHealthIndicator;
-
-    /**
-     * Trigger bulk sync on application startup (if configured)
-     */
-    @EventListener(ApplicationReadyEvent.class)
-    public void onStartup() {
-        if (!searchProperties.getSync().isEnableOnStartup()) {
-            log.info("Startup sync is disabled");
-            return;
-        }
-
-        log.info("Application started. Triggering bulk index sync in background...");
-        syncHealthIndicator.updateStatus(
-            SyncHealthIndicator.SyncState.IN_PROGRESS,
-            "Starting initial product sync",
-            0
-        );
-
-        syncAllProducts()
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe(
-                count -> {
-                    log.info("Startup bulk sync completed successfully. Total products: {}", count);
-                    syncHealthIndicator.updateStatus(
-                        SyncHealthIndicator.SyncState.HEALTHY,
-                        "Sync completed successfully",
-                        count
-                    );
-                },
-                e -> {
-                    log.error("Startup bulk sync failed after all retries", e);
-                    syncHealthIndicator.updateStatus(
-                        SyncHealthIndicator.SyncState.FAILED,
-                        "Sync failed: " + e.getMessage(),
-                        0
-                    );
-                }
-            );
-    }
 
     /**
      * Fetch all products and index them in batches with retry logic
@@ -127,7 +85,7 @@ public class IndexSyncService {
                         return Mono.empty(); // Continue with next batch
                     });
             })
-            .then(Mono.just(count.get()))
+            .then(Mono.fromCallable(() -> count.get()))
             .doOnSuccess(total -> log.info("Bulk sync finished. Total products indexed: {}", total))
             .doOnError(e -> log.error("Bulk sync failed", e));
     }

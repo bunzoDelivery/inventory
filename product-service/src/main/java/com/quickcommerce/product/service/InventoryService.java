@@ -574,12 +574,28 @@ public class InventoryService {
         /**
          * Get stores for multiple products (bulk operation)
          * Returns map of productId -> List<storeId>
+         * Uses single bulk query to avoid connection pool exhaustion with large product lists
          */
         public Mono<Map<Long, List<Long>>> getStoresForProducts(List<Long> productIds) {
-                return Flux.fromIterable(productIds)
-                                .flatMap(productId -> getStoresForProduct(productId)
-                                                .collectList()
-                                                .map(stores -> Map.entry(productId, stores)))
-                                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+                if (productIds == null || productIds.isEmpty()) {
+                        return Mono.just(Map.of());
+                }
+                return inventoryItemRepository.findByProductIdIn(productIds)
+                                .collectList()
+                                .map(items -> {
+                                        Map<Long, List<Long>> result = new java.util.HashMap<>();
+                                        for (Long pid : productIds) {
+                                                result.put(pid, new java.util.ArrayList<>());
+                                        }
+                                        for (InventoryItem item : items) {
+                                                result.computeIfAbsent(item.getProductId(), k -> new java.util.ArrayList<>())
+                                                                .add(item.getStoreId());
+                                        }
+                                        // Deduplicate store IDs per product
+                                        Map<Long, List<Long>> deduped = new java.util.HashMap<>();
+                                        result.forEach((pid, stores) ->
+                                                deduped.put(pid, stores.stream().distinct().toList()));
+                                        return deduped;
+                                });
         }
 }

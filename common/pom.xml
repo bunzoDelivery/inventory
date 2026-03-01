@@ -42,6 +42,20 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Flyway + MySQL for migrations (migrate/repair from CLI) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -52,6 +66,14 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>10.0.1</version>
+                <configuration>
+                    <locations>classpath:db/migration</locations>
+                </configuration>
+            </plugin>
             <!-- Skip Spring Boot repackaging for library module -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>

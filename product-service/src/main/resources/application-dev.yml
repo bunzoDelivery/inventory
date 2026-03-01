@@ -1,18 +1,19 @@
 # Development Environment Overrides
+# Uses env vars for Docker compatibility (DB_HOST=host.docker.internal when in containers)
 spring:
   r2dbc:
-    url: r2dbc:mysql://localhost:3306/inventory
-    username: root
-    password: root
+    url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     pool:
       initial-size: 10
       max-size: 20
       max-idle-time: 30m
 
   flyway:
-    url: jdbc:mysql://localhost:3306/inventory
-    user: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    user: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
 
   # Cache disabled for MVP
   cache:

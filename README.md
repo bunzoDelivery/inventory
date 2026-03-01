@@ -14,7 +14,7 @@ This system provides comprehensive product catalog management, real-time invento
 ### Search Service (Port 8083)
 - **Intelligent Search**: Powered by Meilisearch with relevance ranking
 - **Availability Integration**: Real-time stock status in search results
-- **Admin Controls**: Synonyms, settings, and index management
+- **Admin Controls**: Synonyms, settings (auto-bootstrap on startup), and index management
 
 ## Technology Stack
 
@@ -432,63 +432,89 @@ Content-Type: application/json
 {
   "query": "*",
   "storeId": 1,
+  "page": 1,
   "pageSize": 50
 }
 ```
 
 #### Admin APIs (Require Authentication)
 
-**Create Synonym**
+All admin endpoints use HTTP Basic auth: `admin:admin123`
+
+**Get All Settings**
+```bash
+GET /admin/search/settings
+curl -u admin:admin123 http://localhost:8083/admin/search/settings
+```
+
+**Upsert Setting**
+```bash
+PUT /admin/search/settings
+curl -u admin:admin123 -X PUT http://localhost:8083/admin/search/settings \
+  -H "Content-Type: application/json" \
+  -d '{"key":"stop_words","valueJson":"[\"a\",\"an\",\"the\"]","description":"Common stop words"}'
+```
+
+**Bootstrap Default Settings** (creates defaults if table is empty)
+```bash
+POST /admin/search/settings/bootstrap
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/settings/bootstrap
+```
+
+**Sync Config to Meilisearch** (push DB settings to search engine)
+```bash
+POST /admin/search/sync
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/sync
+```
+
+**Create/Update Synonym**
 ```bash
 POST /admin/search/synonyms
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
-Content-Type: application/json
-
-{
-  "word": "dahi",
-  "synonyms": ["curd", "yogurt"]
-}
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/synonyms \
+  -H "Content-Type: application/json" \
+  -d '{"term":"doodh","synonyms":["milk"]}'
 ```
 
 **Get All Synonyms**
 ```bash
 GET /admin/search/synonyms
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
+curl -u admin:admin123 http://localhost:8083/admin/search/synonyms
 ```
 
-**Get Search Settings**
+**Delete Synonym**
 ```bash
-GET /admin/search/settings
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
-```
-
-**Update Search Setting**
-```bash
-PUT /admin/search/settings/{key}
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
-Content-Type: application/json
-
-{
-  "value": "10"
-}
-```
-
-**Rebuild Search Index**
-```bash
-POST /admin/search/index/rebuild
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
+DELETE /admin/search/synonyms/{term}
+curl -u admin:admin123 -X DELETE http://localhost:8083/admin/search/synonyms/doodh
 ```
 
 **Get Index Statistics**
 ```bash
 GET /admin/search/index/stats
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
+curl -u admin:admin123 http://localhost:8083/admin/search/index/stats
 ```
 
-**Trigger Config Sync**
+**Create Index**
 ```bash
-POST /admin/search/config/sync
-Authorization: Basic YWRtaW46YWRtaW4xMjM=
+POST /admin/search/index/create
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/index/create
+```
+
+**Update Index Settings** (push DB to Meilisearch)
+```bash
+PUT /admin/search/index/settings
+curl -u admin:admin123 -X PUT http://localhost:8083/admin/search/index/settings
+```
+
+**Sync Products**
+```bash
+POST /admin/search/index/sync-data
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/index/sync-data
+```
+
+**Rebuild Search Index**
+```bash
+POST /admin/search/index/rebuild
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/index/rebuild
 ```
 
 #### Health & Metrics
@@ -558,10 +584,11 @@ GET /actuator/metrics/search.results
 - Graceful degradation when services unavailable
 
 ### Search Integration
-- Automatic product indexing on startup
+- **Sequential startup**: Index creation → settings bootstrap → config sync → product sync
+- Auto-bootstraps default settings (ranking rules, searchable/filterable/sortable attributes) if DB is empty
 - Store-aware search with inventory filtering
 - Synonym support for better matches
-- Configurable relevance ranking
+- Configurable relevance ranking via admin APIs
 
 ### Monitoring
 - Prometheus metrics for requests, latency, errors

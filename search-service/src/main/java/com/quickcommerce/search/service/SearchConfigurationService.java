@@ -12,8 +12,6 @@ import com.quickcommerce.search.repository.SearchSettingRepository;
 import com.quickcommerce.search.repository.SearchSynonymRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
@@ -113,6 +111,64 @@ public class SearchConfigurationService {
      */
     public Flux<SearchSetting> getAllSettings() {
         return settingRepository.findAll();
+    }
+
+    /**
+     * Upsert a setting (create or update)
+     * @param key Setting key
+     * @param valueJson JSON array as string
+     * @param description Description
+     * @param updatedBy Username
+     * @return Mono of saved SearchSetting
+     */
+    public Mono<SearchSetting> saveSetting(String key, String valueJson, String description, String updatedBy) {
+        return settingRepository.findByKey(key)
+            .switchIfEmpty(Mono.just(SearchSetting.builder().key(key).build()))
+            .flatMap(entity -> {
+                entity.setValueJson(valueJson);
+                entity.setDescription(description);
+                entity.setUpdatedAt(LocalDateTime.now());
+                entity.setUpdatedBy(updatedBy);
+                return settingRepository.save(entity);
+            })
+            .as(transactionalOperator::transactional);
+    }
+
+    /**
+     * Bootstrap default settings if table is empty
+     * @param updatedBy Username
+     * @return Mono<Integer> count of settings created
+     */
+    public Mono<Integer> bootstrapDefaultSettings(String updatedBy) {
+        return settingRepository.count()
+            .flatMap(count -> {
+                if (count > 0) {
+                    log.info("Settings already exist ({}), skipping bootstrap", count);
+                    return Mono.just(0);
+                }
+                
+                log.info("Bootstrapping default search settings");
+                
+                Map<String, String[]> defaults = Map.of(
+                    "ranking_rules", new String[]{"words", "typo", "proximity", "attribute", "sort", "exactness"},
+                    "searchable_attributes", new String[]{"name", "brand", "keywords", "barcode"},
+                    "filterable_attributes", new String[]{"storeIds", "isActive", "brand", "categoryId", "isBestseller"},
+                    "sortable_attributes", new String[]{"price", "searchPriority"}
+                );
+                
+                return Flux.fromIterable(defaults.entrySet())
+                    .flatMap(entry -> {
+                        try {
+                            String json = objectMapper.writeValueAsString(entry.getValue());
+                            return saveSetting(entry.getKey(), json, "Default " + entry.getKey(), updatedBy);
+                        } catch (JsonProcessingException e) {
+                            log.error("Failed to serialize setting {}", entry.getKey(), e);
+                            return Mono.empty();
+                        }
+                    })
+                    .count()
+                    .map(Long::intValue);
+            });
     }
 
     /**
@@ -218,25 +274,5 @@ public class SearchConfigurationService {
      */
     private String[] convertJsonToStringArray(String jsonValue) throws JsonProcessingException {
         return objectMapper.readValue(jsonValue, String[].class);
-    }
-
-    /**
-     * Load settings on startup with retry logic
-     */
-    @EventListener(ApplicationReadyEvent.class)
-    public void onStartup() {
-        log.info("Initializing search configuration sync...");
-        publishConfiguration()
-            .retryWhen(reactor.util.retry.Retry.backoff(3, java.time.Duration.ofSeconds(2))
-                .maxBackoff(java.time.Duration.ofSeconds(10))
-                .doBeforeRetry(signal -> 
-                    log.warn("Retrying configuration sync (attempt {}/3): {}", 
-                        signal.totalRetries() + 1,
-                        signal.failure().getMessage())
-                )
-            )
-            .doOnSuccess(task -> log.info("Configuration sync completed. Task UID: {}", task.getTaskUid()))
-            .doOnError(e -> log.error("Configuration sync failed after all retries", e))
-            .subscribe();
     }
 }

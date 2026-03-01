@@ -11,7 +11,6 @@
 ### 1. Start Meilisearch
 
 ```bash
-cd d:\bunzo\inventory
 docker-compose -f docker-compose-dev.yml up -d meilisearch
 ```
 
@@ -22,67 +21,107 @@ docker-compose -f docker-compose-dev.yml up -d meilisearch
 ```bash
 # From project root
 mvn flyway:migrate -pl common
-
-# OR using inventory-service
-cd inventory-service
-mvn flyway:migrate
 ```
 
 This creates:
-- `product_store_assortment` table
-- New search columns in `products` table
+- `search_settings` and `search_synonyms` tables
+- Other catalog/inventory tables as needed
 
 ### 3. Start Search Service
 
 ```bash
-cd d:\bunzo\inventory
 mvn spring-boot:run -pl search-service -Dspring-boot.run.profiles=dev
 ```
 
-**What happens:**
-- Service starts on port `8083`
-- Auto-creates Meilisearch index
-- Seeds 10 sample products
-- Ready for testing!
+**Startup sequence (automatic):**
+1. Creates Meilisearch index if missing (with `primaryKey="id"`)
+2. Auto-bootstraps default settings if `search_settings` is empty
+3. Syncs settings and synonyms from DB to Meilisearch
+4. Syncs products from catalog service (if `sync.enable-on-startup=true`)
 
 ### 4. Test Search API
 
+Search endpoint is public (no auth required).
+
 #### Basic Search
 ```bash
-curl -X POST http://localhost:8083/search ^
-  -H "Content-Type: application/json" ^
-  -d "{\"query\":\"milk\",\"storeId\":1,\"limit\":5}"
+curl -X POST http://localhost:8083/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"milk","storeId":1,"page":1,"pageSize":5}'
 ```
 
 #### Hindi Synonym Test
 ```bash
-curl -X POST http://localhost:8083/search ^
-  -H "Content-Type: application/json" ^
-  -d "{\"query\":\"doodh\",\"storeId\":1,\"limit\":5}"
+curl -X POST http://localhost:8083/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"doodh","storeId":1,"page":1,"pageSize":5}'
 ```
 
 #### Brand Search
 ```bash
-curl -X POST http://localhost:8083/search ^
-  -H "Content-Type: application/json" ^
-  -d "{\"query\":\"amul\",\"storeId\":1,\"limit\":10}"
+curl -X POST http://localhost:8083/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"amul","storeId":1,"page":1,"pageSize":10}'
 ```
 
 ## Admin Endpoints
 
-### Get Index Stats
+All admin endpoints require HTTP Basic auth: `admin:admin123`
+
+### Index Management
+
+| Action | Method | Endpoint |
+|--------|--------|----------|
+| Get index stats | GET | `/admin/search/index/stats` |
+| Create index | POST | `/admin/search/index/create` |
+| Update settings (push DB → Meilisearch) | PUT | `/admin/search/index/settings` |
+| Sync products | POST | `/admin/search/index/sync-data` |
+| Rebuild index | POST | `/admin/search/index/rebuild` |
+
+### Settings Management
+
+| Action | Method | Endpoint |
+|--------|--------|----------|
+| Get all settings | GET | `/admin/search/settings` |
+| Upsert setting | PUT | `/admin/search/settings` |
+| Bootstrap defaults (if empty) | POST | `/admin/search/settings/bootstrap` |
+| Sync config to Meilisearch | POST | `/admin/search/sync` |
+
+### Synonyms
+
+| Action | Method | Endpoint |
+|--------|--------|----------|
+| Get all synonyms | GET | `/admin/search/synonyms` |
+| Create/update synonym | POST | `/admin/search/synonyms` |
+| Delete synonym | DELETE | `/admin/search/synonyms/{term}` |
+
+### Example: Get Index Stats
 ```bash
-curl http://localhost:8083/admin/search/index/stats
+curl -u admin:admin123 http://localhost:8083/admin/search/index/stats
 ```
 
-### Recreate Index
+### Example: Bootstrap Default Settings
 ```bash
-curl -X POST http://localhost:8083/admin/search/index/create
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/settings/bootstrap
 ```
 
-### Update Settings (synonyms, etc.)
+### Example: Upsert Setting
 ```bash
-curl -X PUT http://localhost:8083/admin/search/index/settings
+curl -u admin:admin123 -X PUT http://localhost:8083/admin/search/settings \
+  -H "Content-Type: application/json" \
+  -d '{"key":"stop_words","valueJson":"[\"a\",\"an\",\"the\"]","description":"Common stop words"}'
+```
+
+### Example: Add Synonym
+```bash
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/synonyms \
+  -H "Content-Type: application/json" \
+  -d '{"term":"doodh","synonyms":["milk"]}'
+```
+
+### Example: Sync Products
+```bash
+curl -u admin:admin123 -X POST http://localhost:8083/admin/search/index/sync-data
 ```
 
 ## Build & Package
@@ -104,12 +143,13 @@ mvn clean install -DskipTests
 **Solution:** Add Maven bin directory to PATH environment variable
 
 **Issue:** Meilisearch connection refused  
-**Solution:** Ensure Meilisearch container is running: `docker ps | findstr meilisearch`
+**Solution:** Ensure Meilisearch container is running: `docker ps | grep meilisearch`
 
 **Issue:** No search results  
-**Solution:** Check if index exists and has data: `curl http://localhost:8083/admin/search/index/stats`
+**Solution:** Check if index exists and has data: `curl -u admin:admin123 http://localhost:8083/admin/search/index/stats`
 
-## Next Steps
+**Issue:** 401 Unauthorized on admin endpoints  
+**Solution:** Use HTTP Basic auth: `curl -u admin:admin123 <url>`
 
-- **Phase 4:** Implement product indexing from catalog service
-- **Phase 5:** Add comprehensive unit and integration tests
+**Issue:** Empty index after startup  
+**Solution:** Ensure product-service and catalog are reachable. Trigger manual sync: `curl -u admin:admin123 -X POST http://localhost:8083/admin/search/index/sync-data`

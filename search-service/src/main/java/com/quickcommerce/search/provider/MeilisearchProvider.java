@@ -91,6 +91,19 @@ public class MeilisearchProvider {
     }
 
     /**
+     * Check if index exists
+     * @return true if index exists, false otherwise
+     */
+    public boolean indexExists() {
+        try {
+            getProductsIndex().getStats();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Updates index settings dynamically from configuration
      * Returns the TaskInfo for tracking
      */
@@ -126,7 +139,7 @@ public class MeilisearchProvider {
     public Mono<Void> upsertDocument(ProductDocument document) {
         return Mono.fromCallable(() -> {
             Index index = getProductsIndex();
-            index.addDocuments("[" + toJson(document) + "]");
+            index.addDocuments("[" + toJson(document) + "]", "id");
             log.debug("Upserted document: {}", document.getId());
             return null;
         })
@@ -142,7 +155,7 @@ public class MeilisearchProvider {
         return Mono.fromCallable(() -> {
             Index index = getProductsIndex();
             String json = toJsonArray(documents);
-            index.addDocuments(json);
+            index.addDocuments(json, "id");
             log.info("Upserted {} documents", documents.size());
             return null;
         })

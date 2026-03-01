@@ -117,6 +117,50 @@ public class SearchAdminController {
     }
 
     /**
+     * Upsert a setting
+     */
+    @PutMapping("/settings")
+    public Mono<ResponseEntity<com.quickcommerce.search.entity.SearchSetting>> upsertSetting(
+            @RequestBody SettingRequest request,
+            Authentication authentication) {
+        String username = authentication.getName();
+        log.info("Upserting setting: key={}, user={}", request.getKey(), username);
+        
+        return configurationService.saveSetting(
+                request.getKey(), 
+                request.getValueJson(), 
+                request.getDescription(), 
+                username)
+            .map(ResponseEntity::ok)
+            .onErrorResume(e -> {
+                log.error("Failed to upsert setting", e);
+                return Mono.just(ResponseEntity.status(400).build());
+            });
+    }
+
+    /**
+     * Bootstrap default settings (only if table is empty)
+     */
+    @PostMapping("/settings/bootstrap")
+    public Mono<ResponseEntity<Map<String, Object>>> bootstrapSettings(
+            Authentication authentication) {
+        String username = authentication.getName();
+        log.info("Bootstrap settings requested by: {}", username);
+        
+        return configurationService.bootstrapDefaultSettings(username)
+            .map(count -> ResponseEntity.ok(Map.<String, Object>of(
+                "status", "success",
+                "settingsCreated", count,
+                "message", count > 0 ? "Default settings created" : "Settings already exist")))
+            .onErrorResume(e -> {
+                log.error("Bootstrap failed", e);
+                return Mono.just(ResponseEntity.status(500).body(Map.of(
+                    "status", "error",
+                    "message", e.getMessage())));
+            });
+    }
+
+    /**
      * Rebuild search index
      */
     @PostMapping("/index/rebuild")
@@ -138,5 +182,12 @@ public class SearchAdminController {
     public static class SynonymRequest {
         private String term;
         private List<String> synonyms;
+    }
+
+    @Data
+    public static class SettingRequest {
+        private String key;
+        private String valueJson;  // JSON array as string
+        private String description;
     }
 }

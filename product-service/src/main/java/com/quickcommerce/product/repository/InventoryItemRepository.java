@@ -95,6 +95,13 @@ public interface InventoryItemRepository extends ReactiveCrudRepository<Inventor
     Flux<InventoryItem> findByProductId(Long productId);
 
     /**
+     * Find all inventory items for multiple product IDs (bulk - single query)
+     * Used by getStoresForProducts to avoid connection pool exhaustion
+     */
+    @Query("SELECT * FROM inventory_items WHERE product_id IN (:productIds)")
+    Flux<InventoryItem> findByProductIdIn(java.util.List<Long> productIds);
+
+    /**
      * Find items with stock above threshold
      */
     Flux<InventoryItem> findByCurrentStockGreaterThan(Integer threshold);

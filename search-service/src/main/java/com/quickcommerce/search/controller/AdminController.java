@@ -23,6 +23,7 @@ import java.util.Map;
 public class AdminController {
 
     private final MeilisearchProvider meilisearchProvider;
+    private final com.quickcommerce.search.service.SearchConfigurationService configurationService;
 
     /**
      * Create products index with settings
@@ -47,19 +48,20 @@ public class AdminController {
      * Update index settings (synonyms, searchable attributes, etc.)
      */
     @PutMapping("/index/settings")
-    public Mono<ResponseEntity<Map<String, String>>> updateSettings() {
+    public Mono<ResponseEntity<Map<String, Object>>> updateSettings() {
         log.info("Admin: Updating index settings");
 
-        return meilisearchProvider.updateIndexSettings()
-                .then(Mono.fromCallable(() -> ResponseEntity.ok(Map.of(
-                        "status", "success",
-                        "message", "Settings updated successfully"))))
-                .onErrorResume(e -> {
-                    log.error("Failed to update settings", e);
-                    return Mono.just(ResponseEntity.status(500).body(Map.of(
-                            "status", "error",
-                            "message", e.getMessage())));
-                });
+        return configurationService.publishConfiguration()
+            .map(task -> ResponseEntity.ok(Map.<String, Object>of(
+                "status", "enqueued",
+                "taskUid", task.getTaskUid(),
+                "message", "Settings pushed to Meilisearch")))
+            .onErrorResume(e -> {
+                log.error("Failed to update settings", e);
+                return Mono.just(ResponseEntity.status(500).body(Map.of(
+                    "status", "error",
+                    "message", e.getMessage())));
+            });
     }
 
     /**
