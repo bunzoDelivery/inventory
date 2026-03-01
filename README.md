@@ -579,10 +579,17 @@ Content-Type: application/json
       "qty": 2,
       "unitPrice": 25.00,
       "subTotal": 50.00,
-      "available": true
+      "availableQuantity": 100
+    },
+    {
+      "sku": "PARLE-G-BISCUIT",
+      "qty": 1,
+      "unitPrice": 25.00,
+      "subTotal": 25.00,
+      "availableQuantity": 0
     }
   ],
-  "warnings": []
+  "warnings": ["Insufficient stock for PARLE-G-BISCUIT"]
 }
 ```
 

@@ -70,11 +70,10 @@ public class OrderPreviewService {
 
                                     InventoryAvailabilityResponse.ProductAvailability avail =
                                             availabilityMap.get(req.getSku());
-                                    boolean available = avail != null
-                                            && Boolean.TRUE.equals(avail.getInStock())
-                                            && (avail.getAvailableStock() == null || avail.getAvailableStock() >= req.getQty());
+                                    Integer availableQuantity = avail != null && avail.getAvailableStock() != null
+                                            ? avail.getAvailableStock() : null;
 
-                                    if (!available && avail != null) {
+                                    if (avail != null && (availableQuantity == null || availableQuantity < req.getQty())) {
                                         warnings.add("Insufficient stock for " + req.getSku());
                                     }
 
@@ -86,7 +85,7 @@ public class OrderPreviewService {
                                             .qty(req.getQty())
                                             .unitPrice(price)
                                             .subTotal(subTotal)
-                                            .available(available)
+                                            .availableQuantity(availableQuantity)
                                             .build());
                                 }
 
@@ -119,7 +118,7 @@ public class OrderPreviewService {
                                             .qty(req.getQty())
                                             .unitPrice(price)
                                             .subTotal(subTotal)
-                                            .available(null)
+                                            .availableQuantity(null)
                                             .build());
                                 }
 

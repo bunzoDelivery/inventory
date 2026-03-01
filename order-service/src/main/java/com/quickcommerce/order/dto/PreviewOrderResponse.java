@@ -28,6 +28,6 @@ public class PreviewOrderResponse {
         private Integer qty;
         private BigDecimal unitPrice;
         private BigDecimal subTotal;
-        private Boolean available;
+        private Integer availableQuantity;
     }
 }
