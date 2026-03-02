@@ -1,6 +1,7 @@
 package com.quickcommerce.product.catalog.repository;
 
 import com.quickcommerce.product.catalog.domain.Product;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
@@ -31,10 +32,23 @@ public interface ProductRepository extends R2dbcRepository<Product, Long> {
     Flux<Product> findBySkuIn(java.util.List<String> skus);
 
     /**
-     * Find products by category ID
+     * Find products by category ID (unpaginated)
      */
-    @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name")
+    @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name, id")
     Flux<Product> findByCategoryId(Long categoryId);
+
+    /**
+     * Find products by category ID with pagination.
+     * ORDER BY name, id ensures stable pagination when names collide.
+     */
+    @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name, id")
+    Flux<Product> findByCategoryId(Long categoryId, Pageable pageable);
+
+    /**
+     * Count active and available products in a category (same predicate as findByCategoryId)
+     */
+    @Query("SELECT COUNT(*) FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE")
+    Mono<Long> countActiveAndAvailableByCategoryId(Long categoryId);
 
     /**
      * Find products by brand

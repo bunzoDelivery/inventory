@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -252,11 +254,31 @@ public class CatalogService {
     }
 
     /**
-     * Get products by category
+     * Get products by category with pagination
      */
-    public Flux<ProductResponse> getProductsByCategory(Long categoryId) {
-        return productRepository.findByCategoryId(categoryId)
-                .map(ProductResponse::fromDomain);
+    public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize) {
+        Pageable pageable = PageRequest.of(pageNum, pageSize);
+        return Mono.zip(
+                productRepository.findByCategoryId(categoryId, pageable)
+                        .map(ProductResponse::fromDomain)
+                        .collectList(),
+                productRepository.countActiveAndAvailableByCategoryId(categoryId)
+        ).map(tuple -> {
+            java.util.List<ProductResponse> content = tuple.getT1();
+            long total = tuple.getT2();
+            int totalPages = (int) Math.ceil((double) total / pageSize);
+            return PagedProductResponse.builder()
+                    .content(content)
+                    .meta(PagedProductResponse.PageMeta.builder()
+                            .page(pageNum)
+                            .size(pageSize)
+                            .totalElements(total)
+                            .totalPages(totalPages)
+                            .first(pageNum == 0)
+                            .last(pageNum >= totalPages - 1 || totalPages == 0)
+                            .build())
+                    .build();
+        });
     }
 
     /**

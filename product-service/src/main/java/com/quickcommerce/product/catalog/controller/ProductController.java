@@ -1,12 +1,16 @@
 package com.quickcommerce.product.catalog.controller;
 
 import com.quickcommerce.product.catalog.dto.CreateProductRequest;
+import com.quickcommerce.product.catalog.dto.PagedProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductResponse;
 import com.quickcommerce.product.catalog.service.CatalogService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -18,6 +22,7 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/api/v1/catalog/products")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 public class ProductController {
 
     private final CatalogService catalogService;
@@ -62,11 +67,14 @@ public class ProductController {
     }
 
     /**
-     * Get products by category
+     * Get products by category with pagination
      */
     @GetMapping("/category/{categoryId}")
-    public Flux<ProductResponse> getProductsByCategory(@PathVariable Long categoryId) {
-        return catalogService.getProductsByCategory(categoryId);
+    public Mono<PagedProductResponse> getProductsByCategory(
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "0") @Min(0) int pageNum,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int pageSize) {
+        return catalogService.getProductsByCategory(categoryId, pageNum, pageSize);
     }
 
     /**
