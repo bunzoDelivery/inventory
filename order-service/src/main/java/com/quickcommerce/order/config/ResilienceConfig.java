@@ -26,4 +26,9 @@ public class ResilienceConfig {
     public RateLimiter orderCreationRateLimiter(RateLimiterRegistry registry) {
         return registry.rateLimiter("order-creation");
     }
+
+    @Bean("payInitiationRateLimiter")
+    public RateLimiter payInitiationRateLimiter(RateLimiterRegistry registry) {
+        return registry.rateLimiter("pay-initiation");
+    }
 }

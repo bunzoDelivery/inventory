@@ -2,7 +2,7 @@ spring:
   application:
     name: order-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:dev,mock-airtel}
 
   # Database Configuration
   r2dbc:
@@ -58,6 +58,22 @@ order:
   payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:15}
   cleanup-interval-ms: ${ORDER_CLEANUP_INTERVAL_MS:60000}
 
+# Airtel Money Config
+# Switch profile to 'airtel' (remove 'mock-airtel') when sandbox credentials are ready
+airtel:
+  base-url: ${AIRTEL_BASE_URL:https://openapiuat.airtel.africa}
+  client-id: ${AIRTEL_CLIENT_ID:mock-id}
+  client-secret: ${AIRTEL_CLIENT_SECRET:mock-secret}
+  # REQUIRED in all deployed environments — must be a publicly reachable HTTPS URL.
+  # Airtel uses this URL to POST payment result webhooks. Localhost will NOT work in staging/prod.
+  # Set AIRTEL_CALLBACK_URL env var to your public webhook endpoint before going live.
+  callback-url: ${AIRTEL_CALLBACK_URL:http://localhost:8082/api/v1/webhooks/airtel}
+  country: ${AIRTEL_COUNTRY:ZM}
+  currency: ${AIRTEL_CURRENCY:ZMW}
+  token-refresh-interval-ms: ${AIRTEL_TOKEN_REFRESH_MS:2700000}   # 45 minutes
+  failsafe-interval-ms: ${AIRTEL_FAILSAFE_INTERVAL_MS:55000}       # 55 seconds
+  failsafe-cutoff-seconds: ${AIRTEL_FAILSAFE_CUTOFF_SECONDS:60}    # orders idle for >60s
+
 # Resilience4j
 resilience4j:
   circuitbreaker:
@@ -76,11 +92,16 @@ resilience4j:
         retry-exceptions:
           - org.springframework.web.reactive.function.client.WebClientRequestException
 
-  # 30 order-creation requests per customer per minute
   ratelimiter:
     instances:
+      # 5 order-creation requests per 60s (global)
       order-creation:
         limit-for-period: 5
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+      # 3 pay-initiation requests per 60s — prevents STK push spam
+      pay-initiation:
+        limit-for-period: 3
         limit-refresh-period: 60s
         timeout-duration: 0s
 

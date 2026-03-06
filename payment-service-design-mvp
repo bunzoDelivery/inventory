@@ -1,0 +1,200 @@
+
+# 📄 Payment Service Architecture & Flow Document
+**Project:** Quick Commerce App (Zambia)
+**Supported Methods:** Cash on Delivery (COD) & Airtel Money (STK Push)
+**Status:** Updated to reflect final implemented design (v2)
+
+---
+
+## 1. Overview & Order State Machine
+
+The user selects their payment method on the Cart/Checkout page. Order creation and payment initiation are **two separate API calls**, keeping order tracking reliable even if Airtel's API is temporarily slow or unavailable.
+
+### Core Order States
+| State | Description |
+|---|---|
+| `PENDING_PAYMENT` | Order created, inventory reserved. Waiting for payment. |
+| `CONFIRMED` | Payment successful (or COD selected). Sent to store to pack. |
+| `CANCELLED` | Payment failed/timed out, or user abandoned. Inventory released. `cancelledReason` field explains why (e.g. `PAYMENT_FAILED: TF`). |
+
+> **Design decision:** There is no separate `PAYMENT_FAILED` state. A failed payment transitions the order directly to `CANCELLED` with a `cancelledReason`. This simplifies the state machine. The user is shown a "Try Again" option which creates a **new order** — there is no in-place retry for MVP.
+
+---
+
+## 2. UI/UX Design (The Checkout Screen)
+
+The user's registered phone number is pre-filled but editable (in case they want to pay from a different Airtel number).
+
+```text
+====================================
+           CHECKOUT
+====================================
+Delivery To: 123 Cairo Road (15 mins)
+Total to Pay: K150.00
+------------------------------------
+PAYMENT METHOD:
+
+ ( ) Cash on Delivery (COD)
+
+ (*) Airtel Money
+    ---------------------------------
+    | +260 | 097 123 4567         | X |  ← Pre-filled, editable
+    ---------------------------------
+
+====================================
+      [ PLACE ORDER - K150.00 ]
+====================================
+```
+
+**Validation:** The "Place Order" button is disabled until a valid 10-digit number starting with `097` or `077` is entered.
+
+---
+
+## 3. Step-by-Step Execution Flow (Airtel Money)
+
+### Step 1: Place Order (Frontend → Backend)
+The user confirms their number is correct and taps **Place Order**. Frontend disables the button immediately (prevents double-tap).
+
+```
+POST /api/v1/orders
+{
+  "storeId": 1,
+  "customerId": "USR-123",
+  "items": [{ "sku": "MLK-500", "qty": 2 }],
+  "paymentMethod": "AIRTEL_MONEY",
+  "delivery": {
+    "latitude": -15.4, "longitude": 28.3,
+    "address": "123 Cairo Road",
+    "phone": "0977123456"
+  }
+}
+```
+
+> ⚠️ **Note:** `paymentPhone` is **not** part of the order creation request. The Airtel number is provided in the next step.
+
+**Backend responds immediately:**
+```json
+{ "orderId": "ORD-abc123", "status": "PENDING_PAYMENT" }
+```
+Inventory is reserved at this point.
+
+---
+
+### Step 2: Initiate Airtel Push (Frontend → Backend → Airtel)
+Frontend immediately follows up with the payment request:
+
+```
+POST /api/v1/orders/ORD-abc123/pay
+{ "paymentPhone": "0971234567" }
+```
+
+**Backend:**
+1. Validates order is still `PENDING_PAYMENT`.
+2. Creates a `payment_attempts` audit record.
+3. Calls Airtel STK Push API with `orderUuid` as the reference (idempotency key).
+4. Stores the `airtelTransactionId` returned by Airtel on the order.
+5. Returns immediately:
+
+```json
+{
+  "pushStatus": "PUSH_SENT",
+  "paymentPhone": "097****567",
+  "message": "Airtel Money prompt sent. Please enter your PIN."
+}
+```
+
+---
+
+### Step 3: Waiting Screen (Frontend & Customer)
+- **Frontend:** Shows a "Processing Payment" overlay — spinner, Airtel logo, *"Please check your phone (097****567) and enter your PIN."*
+- **Polling:** `GET /api/v1/orders/ORD-abc123/payment-status` every 3 seconds.
+- **Customer:** USSD prompt appears on their phone. They enter their PIN.
+
+---
+
+### Step 4: Resolution (Airtel → Backend → Frontend)
+**Happy path (webhook arrives):**
+- Airtel fires `POST /api/v1/webhooks/airtel` with `status_code: "TS"`.
+- Backend updates order to `CONFIRMED`, commits inventory reservation, notifies store.
+- Next poll from frontend returns `orderStatus: "CONFIRMED"` → success screen.
+
+**Failure path (webhook with TF/TA):**
+- Airtel fires webhook with `status_code: "TF"` (failed/abandoned).
+- Backend updates order to `CANCELLED` (`cancelledReason: "PAYMENT_FAILED: TF"`), releases inventory.
+- Frontend shows: *"Payment was not completed."* with a **[Try Again]** button (creates new order) and **[Switch to COD]**.
+
+---
+
+## 4. Logical Flowchart
+
+```text
+[ USER TAPS "PLACE ORDER" ]
+         |
+         v
+POST /api/v1/orders  →  Order created (PENDING_PAYMENT), inventory reserved
+         |
+         v
+POST /api/v1/orders/{id}/pay  →  Airtel STK Push sent
+         |
+         +-- Airtel API Error  →  UI: "Couldn't reach Airtel. Try COD."
+         |                        (order still exists, can be cancelled cleanly)
+         |
+      PUSH_SENT
+         |
+    [ UI: "Waiting for PIN..." ]
+         |
+    (Polls /payment-status every 3s)
+         |
+-------------------------------------------------
+|                        |                      |
+[ Webhook: TS ]   [ Webhook: TF/TA/TE ]   [ No webhook — 60s elapsed ]
+|                        |                      |
+CONFIRMED            CANCELLED            AirtelFailsafeScheduler queries Airtel
+|                        |                      |
+UI: Success!         UI: "Payment           TS → CONFIRMED
+Redirect to          not completed"        TF/TA/TE → CANCELLED
+Tracking             [Try Again]           Still in-progress → wait next cycle
+                     [Use COD]
+```
+
+---
+
+## 5. Edge Cases & Error Handling
+
+| Case | Trigger | Backend Action | Frontend UX |
+|---|---|---|---|
+| **A. Failed payment** | Airtel webhook `TF`/`TA` | Order → `CANCELLED` with `cancelledReason` | "Payment not completed." → [Try Again] / [Use COD] |
+| **B. User ignores PIN prompt** | No webhook + timeout | `AirtelFailsafeScheduler` queries Airtel after 60s | Prompt expired → [Try Again] / [Use COD] |
+| **C. Lost webhook** | User paid but webhook missed | Failsafe scheduler detects `TS` from Airtel API → `CONFIRMED` | Next poll shows success |
+| **D. User closes app** | App killed mid-flow | Backend still receives webhook → `CONFIRMED` | On reopen: `GET /active_orders` shows confirmed order → redirect to tracking |
+| **E. Airtel API down at push time** | `/pay` returns error | Order left in `PENDING_PAYMENT`, cleanup scheduler cancels after timeout | "Couldn't reach Airtel." → [Use COD] |
+
+---
+
+## 6. Key APIs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/orders` | Create order (no payment phone here) |
+| `POST` | `/api/v1/orders/{uuid}/pay` | Initiate Airtel STK push |
+| `GET` | `/api/v1/orders/{uuid}/payment-status` | Frontend polling |
+| `POST` | `/api/v1/webhooks/airtel` | Airtel webhook callback (always 200 OK) |
+
+---
+
+## 7. System Responsibilities
+
+### Frontend Team
+1. **Validation:** Strip spaces; only enable Place Order if 10 digits starting with `097`/`077`.
+2. **Double-tap prevention:** Disable button immediately on tap.
+3. **Two-step call:** Call `POST /orders` first, then `POST /orders/{id}/pay` immediately after.
+4. **Polling:** `GET /payment-status` every 3 seconds. Stop on `CONFIRMED` or `CANCELLED`.
+5. **State persistence:** If app is minimised during PIN entry, polling screen must resume on return.
+
+### Backend Team (Implemented)
+1. **Token management:** OAuth2 token cached in-memory, refreshed every 45 minutes via scheduler.
+2. **Inventory:** Reserved on order creation. Committed on `CONFIRMED`. Released on `CANCELLED`.
+3. **Idempotency:** `orderUuid` is passed as the Airtel reference ID — Airtel won't charge twice for the same reference.
+4. **Webhook security:** Pluggable `AirtelWebhookValidator` interface. `NoOpAirtelWebhookValidator` (dev) — replace with IP allowlist or HMAC validator before production.
+5. **Failsafe scheduler:** `AirtelFailsafeScheduler` runs every 55 seconds. Queries Airtel directly for any `PENDING_PAYMENT` order that received a push but no webhook after 60 seconds.
+6. **Audit:** Every STK push attempt is recorded in `payment_attempts` table with raw webhook body for reconciliation.
