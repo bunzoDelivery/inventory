@@ -3,6 +3,7 @@ package com.quickcommerce.order;
 import com.quickcommerce.order.dto.CreateOrderRequest;
 import com.quickcommerce.order.dto.ProductPriceResponse;
 import com.quickcommerce.order.dto.StockReservationResponse;
+import com.quickcommerce.order.payment.repository.PaymentAttemptRepository;
 import com.quickcommerce.order.repository.OrderEventRepository;
 import com.quickcommerce.order.repository.OrderItemRepository;
 import com.quickcommerce.order.repository.OrderRepository;
@@ -49,6 +50,9 @@ public abstract class BaseIntegrationTest {
 
     @Autowired
     protected OrderEventRepository orderEventRepository;
+
+    @Autowired
+    protected PaymentAttemptRepository paymentAttemptRepository;
 
     protected static MockWebServer mockProductService;
     protected static MockWebServer mockInventoryService;
@@ -97,6 +101,7 @@ public abstract class BaseIntegrationTest {
     protected void cleanDatabase() {
         orderEventRepository.deleteAll().block();
         orderItemRepository.deleteAll().block();
+        paymentAttemptRepository.deleteAll().block();
         orderRepository.deleteAll().block();
     }
 

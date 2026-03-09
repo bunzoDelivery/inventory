@@ -20,3 +20,8 @@ logging:
     com.quickcommerce: DEBUG
     org.springframework.r2dbc: DEBUG
     io.r2dbc.mysql: DEBUG
+
+# Fast failsafe for local dev/testing with mock-airtel
+airtel:
+  failsafe-interval-ms: 10000    # 10 seconds
+  failsafe-cutoff-seconds: 10    # check orders idle for >10s

@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -31,10 +32,15 @@ public class OrderCleanupScheduler {
     public void cancelUnpaidOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(paymentTimeoutMinutes);
 
+        // Note: Airtel orders (airtel_transaction_id IS NOT NULL) are excluded here.
+        // Those are handled by AirtelFailsafeScheduler which queries Airtel's API
+        // before cancelling.
         orderRepo.findByStatusAndCreatedAtBefore(OrderStatus.PENDING_PAYMENT.name(), cutoff)
+                .filter(order -> order.getAirtelTransactionId() == null) // COD/push-not-sent-yet only
                 .take(50)
                 .flatMap(order -> {
-                    log.info("Cancelling expired order: {} (created at {})", order.getOrderUuid(), order.getCreatedAt());
+                    log.info("Cancelling expired order: {} (created at {})", order.getOrderUuid(),
+                            order.getCreatedAt());
                     OrderStatus previous = order.orderStatus();
 
                     return inventoryClient.cancelOrderReservations(order.getOrderUuid())
@@ -46,16 +52,15 @@ public class OrderCleanupScheduler {
                                 order.setStatus(OrderStatus.CANCELLED.name());
                                 order.setCancelledReason("Payment timeout");
                                 return orderRepo.save(order)
-                                        .flatMap(saved ->
-                                                orderEventRepo.save(
-                                                        OrderEvent.cancelled(saved.getId(), previous,
-                                                                "Payment timeout after " + paymentTimeoutMinutes + " minutes",
-                                                                "SYSTEM")));
+                                        .flatMap(saved -> orderEventRepo.save(
+                                                OrderEvent.cancelled(saved.getId(), previous,
+                                                        "Payment timeout after " + paymentTimeoutMinutes + " minutes",
+                                                        "SYSTEM")));
                             }));
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(e -> log.error("Cleanup scheduler error", e))
-                .onErrorResume(e -> Mono.empty())
+                .onErrorResume(e -> Flux.empty())
                 .subscribe();
     }
 }

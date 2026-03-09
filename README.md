@@ -19,10 +19,11 @@ This system provides comprehensive product catalog management, real-time invento
 
 ### Order Service (Port 8082)
 - **Order Management**: Create, preview, cancel, and track orders
+- **Payment Integration**: Airtel Money mobile payments with STK push
 - **Stock Reservation**: Integrates with product-service for inventory checks and reservations
-- **Order Lifecycle**: PENDING → PACKING → OUT_FOR_DELIVERY → DELIVERED
+- **Order Lifecycle**: PENDING_PAYMENT → CONFIRMED → PACKING → OUT_FOR_DELIVERY → DELIVERED
 - **Idempotency**: Optional Idempotency-Key header for safe retries
-- **Rate Limiting**: 5 order creations per customer per minute
+- **Rate Limiting**: 5 order creations per minute, 3 payment initiations per minute
 
 ## Technology Stack
 
@@ -79,6 +80,8 @@ SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 ```
 
 Order-service will be available on `http://localhost:8082`
+
+**Note:** In `dev` profile, the mock Airtel client auto-confirms payments after 10 seconds for faster local testing.
 
 5. Check health:
 ```bash
@@ -606,7 +609,7 @@ Idempotency-Key: optional-unique-key-for-retries
     { "sku": "AMUL-MILK-500ML", "quantity": 2 },
     { "sku": "PARLE-G-BISCUIT", "quantity": 1 }
   ],
-  "paymentMethod": "COD",
+  "paymentMethod": "AIRTEL_MONEY",
   "delivery": {
     "latitude": -15.3875,
     "longitude": 28.3228,
@@ -617,7 +620,9 @@ Idempotency-Key: optional-unique-key-for-retries
 }
 ```
 
-**Response:** `201 Created` with `OrderResponse` (orderId, status, itemsTotal, deliveryFee, grandTotal, items, delivery, etc.)
+**Response:** `201 Created`
+- **COD orders**: Status `CONFIRMED` (immediately ready for fulfillment)
+- **Digital payment orders** (AIRTEL_MONEY, MTN_MONEY): Status `PENDING_PAYMENT` (requires payment via `/pay` endpoint)
 
 #### Query
 
@@ -638,11 +643,46 @@ GET /api/v1/orders/store/{storeId}?status=PENDING&page=0&size=20
 
 #### Customer Actions
 
+**Initiate Payment** (for AIRTEL_MONEY/MTN_MONEY orders)
+```bash
+POST /api/v1/orders/{orderUuid}/pay
+Content-Type: application/json
+X-Customer-Id: cust-123
+
+{
+  "paymentPhone": "0971234567"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "orderUuid": "550e8400-e29b-41d4-a716-446655440000",
+  "orderStatus": "PENDING_PAYMENT",
+  "paymentStatus": "PENDING",
+  "paymentPhone": "097****567",
+  "pushStatus": "PUSH_SENT",
+  "message": "Airtel Money prompt sent to 097****567. Please enter your PIN."
+}
+```
+
+**Poll Payment Status** (poll every 3 seconds after initiating payment)
+```bash
+GET /api/v1/orders/{orderUuid}/payment-status
+X-Customer-Id: cust-123
+```
+
+**Response states:**
+- `AWAITING_PUSH` - Before `/pay` is called
+- `PUSH_SENT` - STK push sent, waiting for customer PIN
+- `CONFIRMED` - Payment successful, order confirmed
+- `FAILED` - Payment failed or cancelled
+
 **Cancel Order**
 ```bash
 POST /api/v1/orders/{orderUuid}/cancel
 Content-Type: application/json
-Customer-Id: cust-123
+X-Customer-Id: cust-123
 
 {
   "reason": "Changed my mind"
@@ -722,12 +762,43 @@ GET /actuator/health
 | `ORDER_DELIVERY_FEE` | Delivery fee (ZMW) | 15.00 |
 | `ORDER_PAYMENT_TIMEOUT_MINUTES` | Payment timeout | 15 |
 | `ORDER_CLEANUP_INTERVAL_MS` | Cleanup interval for expired orders | 60000 |
+| `SPRING_PROFILES_ACTIVE` | Spring profiles | mock-airtel |
+| `AIRTEL_CLIENT_ID` | Airtel API client ID (for `airtel` profile) | - |
+| `AIRTEL_CLIENT_SECRET` | Airtel API client secret (for `airtel` profile) | - |
+| `AIRTEL_CALLBACK_URL` | Airtel webhook URL (HTTPS, publicly accessible) | - |
 
 ### Application Profiles
 
+**Product Service & Search Service:**
 - `dev` - Development with localhost database
 - `prod` - Production with environment-based configuration
 - `test` - Test profile
+
+**Order Service:**
+- `dev` - Development with localhost database (includes mock-airtel by default)
+- `mock-airtel` - Mock Airtel Money client for local/staging (no real API calls, auto-confirms after 10s)
+- `airtel` - Real Airtel Money API integration (requires `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_CALLBACK_URL`)
+
+**Default:** `SPRING_PROFILES_ACTIVE=mock-airtel`
+
+**Production with mock payment:**
+```bash
+SPRING_PROFILES_ACTIVE=mock-airtel \
+DB_HOST=prod-db-host \
+DB_USERNAME=admin \
+DB_PASSWORD=secure-password \
+java -jar order-service.jar
+```
+
+**Production with real Airtel API:**
+```bash
+SPRING_PROFILES_ACTIVE=airtel \
+DB_HOST=prod-db-host \
+AIRTEL_CLIENT_ID=your-client-id \
+AIRTEL_CLIENT_SECRET=your-client-secret \
+AIRTEL_CALLBACK_URL=https://yourdomain.com/api/v1/webhooks/airtel \
+java -jar order-service.jar
+```
 
 ## Architecture
 
@@ -819,9 +890,10 @@ GET /actuator/health
 - `search_settings` - Search configuration
 
 **Orders** (order-service)
-- `customer_orders` - Order header with status, payment, delivery
+- `customer_orders` - Order header with status, payment method, delivery details
 - `order_items` - Line items per order
 - `order_events` - Order lifecycle event log
+- `payment_attempts` - Airtel Money payment audit trail
 
 ## Development
 
@@ -839,7 +911,7 @@ SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 
 # Order Service (requires product-service)
 cd order-service
-SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev,mock-airtel mvn spring-boot:run
 ```
 
 **With Custom Database:**

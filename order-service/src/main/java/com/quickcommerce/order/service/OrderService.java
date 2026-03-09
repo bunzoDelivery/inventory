@@ -4,6 +4,7 @@ import com.quickcommerce.order.client.CatalogClient;
 import com.quickcommerce.order.client.InventoryClient;
 import com.quickcommerce.order.client.NotificationClient;
 import com.quickcommerce.order.domain.*;
+import com.quickcommerce.order.util.PhoneUtils;
 import com.quickcommerce.order.dto.*;
 import com.quickcommerce.order.exception.InsufficientStockException;
 import com.quickcommerce.order.exception.InvalidOrderStateException;
@@ -154,25 +155,27 @@ public class OrderService {
                                             items.forEach(item -> item.setOrderId(savedOrder.getId()));
                                             return orderItemRepo.saveAll(items)
                                                     .collectList()
-                                                    .flatMap(savedItems ->
-                                                            orderEventRepo.save(OrderEvent.created(savedOrder.getId(), initialStatus))
-                                                                    .thenReturn(savedOrder));
+                                                    .flatMap(savedItems -> orderEventRepo
+                                                            .save(OrderEvent.created(savedOrder.getId(), initialStatus))
+                                                            .thenReturn(savedOrder));
                                         })
                                         .as(transactionalOperator::transactional)
                                         .flatMap(savedOrder -> {
                                             if (isCod) {
                                                 return inventoryClient.confirmReservation(savedOrder.getOrderUuid())
-                                                        .then(Mono.fromRunnable(() ->
-                                                                notificationClient.sendOrderConfirmedEvent(savedOrder)
-                                                                        .subscribe(v -> {}, e -> log.error(
-                                                                                "Notification failed for order {}",
-                                                                                savedOrder.getOrderUuid(), e))))
+                                                        .then(notificationClient.sendOrderConfirmedEvent(savedOrder)
+                                                                .onErrorResume(e -> {
+                                                                    log.error("Notification failed for order {}",
+                                                                            savedOrder.getOrderUuid(), e);
+                                                                    return Mono.empty();
+                                                                }))
                                                         .then(buildFullResponse(savedOrder));
                                             }
                                             return buildFullResponse(savedOrder);
                                         })
                                         .onErrorResume(saveError -> {
-                                            log.error("Failed to save order, releasing reservations for {}", orderUuid, saveError);
+                                            log.error("Failed to save order, releasing reservations for {}", orderUuid,
+                                                    saveError);
                                             return inventoryClient.cancelOrderReservations(orderUuid)
                                                     .then(Mono.error(saveError));
                                         });
@@ -197,20 +200,21 @@ public class OrderService {
                                 "Cannot confirm payment for order in status: " + current));
                     }
 
-                    OrderStatus previous = current;
                     order.setStatus(OrderStatus.CONFIRMED.name());
                     order.setPaymentStatus(PaymentStatus.PAID.name());
 
                     return orderRepo.save(order)
-                            .flatMap(savedOrder ->
-                                    orderEventRepo.save(OrderEvent.paymentReceived(savedOrder.getId(), savedOrder.paymentMethodEnum()))
-                                            .then(inventoryClient.confirmReservation(savedOrder.getOrderUuid()))
-                                            .then(Mono.fromRunnable(() ->
-                                                    notificationClient.sendOrderConfirmedEvent(savedOrder)
-                                                            .subscribe(v -> {}, e -> log.error(
-                                                                    "Notification failed for order {}",
-                                                                    savedOrder.getOrderUuid(), e))))
-                                            .then(buildFullResponse(savedOrder)));
+                            .flatMap(savedOrder -> orderEventRepo
+                                    .save(OrderEvent.paymentReceived(savedOrder.getId(),
+                                            savedOrder.paymentMethodEnum()))
+                                    .then(inventoryClient.confirmReservation(savedOrder.getOrderUuid()))
+                                    .then(notificationClient.sendOrderConfirmedEvent(savedOrder)
+                                            .onErrorResume(e -> {
+                                                log.error("Notification failed for order {}",
+                                                        savedOrder.getOrderUuid(), e);
+                                                return Mono.empty();
+                                            }))
+                                    .then(buildFullResponse(savedOrder)));
                 });
     }
 
@@ -242,7 +246,7 @@ public class OrderService {
                                         });
 
                                 return orderEventRepo.save(
-                                                OrderEvent.cancelled(savedOrder.getId(), current, reason, "CUSTOMER"))
+                                        OrderEvent.cancelled(savedOrder.getId(), current, reason, "CUSTOMER"))
                                         .then(releaseStock)
                                         .then(buildFullResponse(savedOrder));
                             });
@@ -293,7 +297,9 @@ public class OrderService {
 
     public Flux<OrderResponse> getStoreOrders(Long storeId, String status, int page, int size) {
         if (status != null && !status.isBlank()) {
-            return orderRepo.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, status.toUpperCase(), PageRequest.of(page, size))
+            return orderRepo
+                    .findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, status.toUpperCase(),
+                            PageRequest.of(page, size))
                     .flatMap(this::buildFullResponse);
         }
         return orderRepo.findByStoreIdOrderByCreatedAtDesc(storeId, PageRequest.of(page, size))
@@ -315,12 +321,12 @@ public class OrderService {
                 .toList();
 
         String message = switch (OrderStatus.valueOf(order.getStatus())) {
-            case CONFIRMED        -> "Order confirmed";
-            case PENDING_PAYMENT  -> "Please proceed to payment";
-            case PACKING          -> "Your order is being packed";
+            case CONFIRMED -> "Order confirmed";
+            case PENDING_PAYMENT -> "Please proceed to payment";
+            case PACKING -> "Your order is being packed";
             case OUT_FOR_DELIVERY -> "Your order is out for delivery";
-            case DELIVERED        -> "Order delivered";
-            case CANCELLED        -> "Order cancelled";
+            case DELIVERED -> "Order delivered";
+            case CANCELLED -> "Order cancelled";
         };
 
         BigDecimal itemsTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
@@ -342,6 +348,7 @@ public class OrderService {
                 .status(order.getStatus())
                 .paymentMethod(order.getPaymentMethod())
                 .paymentStatus(order.getPaymentStatus())
+                .paymentPhone(PhoneUtils.maskPhone(order.getPaymentPhone()))
                 .message(message)
                 .itemsTotal(itemsTotal)
                 .deliveryFee(fee)

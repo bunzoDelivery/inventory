@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -60,6 +61,15 @@ public class GlobalExceptionHandler {
                 ));
         log.warn("Validation failed: {}", errors);
         return Mono.just(ResponseEntity.badRequest().body(Map.of("errors", errors)));
+    }
+
+    // Handles ServerWebInputException (missing required headers/params), etc.
+    // Must come before RuntimeException handler to preserve the original status code.
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<Map<String, String>>> handleResponseStatus(ResponseStatusException ex) {
+        log.warn("Request error ({}): {}", ex.getStatusCode(), ex.getReason());
+        return Mono.just(ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("error", ex.getReason() != null ? ex.getReason() : ex.getMessage())));
     }
 
     @ExceptionHandler(RuntimeException.class)

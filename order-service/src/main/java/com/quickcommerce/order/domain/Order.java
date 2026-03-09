@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
@@ -45,6 +46,13 @@ public class Order {
     private String deliveryNotes;
 
     private String cancelledReason;
+
+    @Version
+    private Long version;
+
+    // Airtel Money payment fields
+    private String paymentPhone; // MSISDN sent to Airtel for STK push
+    private String airtelTransactionId; // Airtel-assigned transaction ID (for failsafe polling)
 
     @CreatedDate
     private LocalDateTime createdAt;
