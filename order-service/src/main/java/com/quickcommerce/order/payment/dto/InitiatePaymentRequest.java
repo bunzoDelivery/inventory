@@ -12,6 +12,7 @@ import lombok.Data;
 public class InitiatePaymentRequest {
 
     @NotBlank(message = "Payment phone is required")
-    @Pattern(regexp = "^(097|077)\\d{7}$", message = "Payment phone must be a valid Zambian Airtel/MTN number (e.g. 0971234567)")
+    @Pattern(regexp = "^((\\+91|0)?[6-9]\\d{9}|(\\+260|0)?[79]\\d{8})$", 
+             message = "Payment phone must be a valid Indian (10 digits, starts with 6-9) or Zambian mobile number (e.g. 9876543210, 0971234567, +260977123456)")
     private String paymentPhone;
 }

@@ -2,7 +2,7 @@ spring:
   application:
     name: order-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev,mock-airtel}
+    active: ${SPRING_PROFILES_ACTIVE:mock-airtel}
 
   # Database Configuration
   r2dbc:
