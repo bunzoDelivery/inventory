@@ -24,6 +24,13 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage())));
     }
 
+    @ExceptionHandler(ProductNotFoundException.class)
+    public Mono<ResponseEntity<Map<String, String>>> handleProductNotFound(ProductNotFoundException ex) {
+        log.warn("Product not found: {}", ex.getMessage());
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage())));
+    }
+
     @ExceptionHandler(InsufficientStockException.class)
     public Mono<ResponseEntity<Map<String, String>>> handleInsufficientStock(InsufficientStockException ex) {
         log.warn("Insufficient stock: {}", ex.getMessage());
@@ -42,6 +49,13 @@ public class GlobalExceptionHandler {
     public Mono<ResponseEntity<Map<String, String>>> handleInvalidOrderState(InvalidOrderStateException ex) {
         log.warn("Invalid order state: {}", ex.getMessage());
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage())));
+    }
+
+    @ExceptionHandler(PaymentGatewayException.class)
+    public Mono<ResponseEntity<Map<String, String>>> handlePaymentGateway(PaymentGatewayException ex) {
+        log.error("Payment gateway error: {}", ex.getMessage());
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(Map.of("error", ex.getMessage())));
     }
 

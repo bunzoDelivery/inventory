@@ -8,6 +8,7 @@ import com.quickcommerce.order.domain.OrderStatus;
 import com.quickcommerce.order.domain.PaymentStatus;
 import com.quickcommerce.order.exception.InvalidOrderStateException;
 import com.quickcommerce.order.exception.OrderNotFoundException;
+import com.quickcommerce.order.exception.PaymentGatewayException;
 import com.quickcommerce.order.payment.client.AirtelMoneyClient;
 import com.quickcommerce.order.payment.client.AirtelPushRequest;
 import com.quickcommerce.order.payment.domain.PaymentAttempt;
@@ -131,7 +132,7 @@ public class PaymentService {
                                 savedAttempt.setFailureReason("Airtel returned no transaction ID");
                                 savedAttempt.setResolvedAt(LocalDateTime.now());
                                 return paymentAttemptRepo.save(savedAttempt)
-                                        .then(Mono.error(new RuntimeException(
+                                        .then(Mono.error(new PaymentGatewayException(
                                                 "Airtel did not return a transaction ID. Please try COD or contact support.")));
                             }
 
@@ -159,7 +160,7 @@ public class PaymentService {
                             savedAttempt.setFailureReason("STK push failed: " + e.getMessage());
                             savedAttempt.setResolvedAt(LocalDateTime.now());
                             return paymentAttemptRepo.save(savedAttempt)
-                                    .then(Mono.error(new RuntimeException(
+                                    .then(Mono.error(new PaymentGatewayException(
                                             "Failed to initiate Airtel payment. Please try COD or contact support.",
                                             e)));
                         }));

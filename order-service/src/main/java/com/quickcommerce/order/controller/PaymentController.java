@@ -1,6 +1,7 @@
 package com.quickcommerce.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quickcommerce.order.exception.PaymentGatewayException;
 import com.quickcommerce.order.payment.dto.InitiatePaymentRequest;
 import com.quickcommerce.order.payment.dto.PaymentStatusResponse;
 import com.quickcommerce.order.payment.service.PaymentService;
@@ -103,7 +104,8 @@ public class PaymentController {
         try {
             return objectMapper.readValue(rawBody, AirtelWebhookPayload.class);
         } catch (Exception e) {
-            throw new RuntimeException("Invalid webhook payload", e);
+            log.error("Failed to parse Airtel webhook payload: {}", rawBody, e);
+            throw new PaymentGatewayException("Invalid webhook payload from payment gateway");
         }
     }
 }

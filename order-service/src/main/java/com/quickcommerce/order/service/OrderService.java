@@ -9,6 +9,7 @@ import com.quickcommerce.order.dto.*;
 import com.quickcommerce.order.exception.InsufficientStockException;
 import com.quickcommerce.order.exception.InvalidOrderStateException;
 import com.quickcommerce.order.exception.OrderNotFoundException;
+import com.quickcommerce.order.exception.ProductNotFoundException;
 import com.quickcommerce.order.exception.ServiceUnavailableException;
 import com.quickcommerce.order.repository.OrderEventRepository;
 import com.quickcommerce.order.repository.OrderItemRepository;
@@ -80,11 +81,11 @@ public class OrderService {
                     // Validate all SKUs resolved and prices are sane
                     for (String sku : skus) {
                         if (!priceMap.containsKey(sku)) {
-                            return Mono.error(new RuntimeException("Product not found: " + sku));
+                            return Mono.error(new ProductNotFoundException("Product not found: " + sku));
                         }
                         BigDecimal price = priceMap.get(sku);
                         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
-                            return Mono.error(new RuntimeException("Invalid price for product: " + sku));
+                            return Mono.error(new ProductNotFoundException("Invalid price for product: " + sku));
                         }
                     }
 
