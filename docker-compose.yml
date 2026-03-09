@@ -40,7 +40,9 @@ services:
                 MODULE_NAME: order-service
         container_name: order-service
         environment:
-            SPRING_PROFILES_ACTIVE: prod
+            # TODO: Change to "prod,airtel" once Airtel clientId/secret are configured
+            # and AIRTEL_CLIENT_ID, AIRTEL_CLIENT_SECRET, AIRTEL_CALLBACK_URL env vars are set
+            SPRING_PROFILES_ACTIVE: prod,mock-airtel
             DB_HOST: ${DB_HOST}
             DB_PORT: ${DB_PORT:-3306}
             DB_NAME: ${DB_NAME:-inventory}
