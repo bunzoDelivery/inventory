@@ -1,7 +1,6 @@
 package com.quickcommerce.product.catalog.repository;
 
 import com.quickcommerce.product.catalog.domain.Product;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
@@ -40,9 +39,10 @@ public interface ProductRepository extends R2dbcRepository<Product, Long> {
     /**
      * Find products by category ID with pagination.
      * ORDER BY name, id ensures stable pagination when names collide.
+     * Note: R2DBC doesn't automatically apply Pageable to custom @Query, so we use limit/offset params
      */
-    @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name, id")
-    Flux<Product> findByCategoryId(Long categoryId, Pageable pageable);
+    @Query("SELECT * FROM products WHERE category_id = :categoryId AND is_active = TRUE AND is_available = TRUE ORDER BY name, id LIMIT :limit OFFSET :offset")
+    Flux<Product> findByCategoryId(Long categoryId, int limit, long offset);
 
     /**
      * Count active and available products in a category (same predicate as findByCategoryId)

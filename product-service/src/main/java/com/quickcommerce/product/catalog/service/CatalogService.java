@@ -8,10 +8,7 @@ import com.quickcommerce.product.catalog.repository.ProductRepository;
 import com.quickcommerce.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -257,9 +254,9 @@ public class CatalogService {
      * Get products by category with pagination
      */
     public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNum, pageSize);
+        long offset = (long) pageNum * pageSize;
         return Mono.zip(
-                productRepository.findByCategoryId(categoryId, pageable)
+                productRepository.findByCategoryId(categoryId, pageSize, offset)
                         .map(ProductResponse::fromDomain)
                         .collectList(),
                 productRepository.countActiveAndAvailableByCategoryId(categoryId)
