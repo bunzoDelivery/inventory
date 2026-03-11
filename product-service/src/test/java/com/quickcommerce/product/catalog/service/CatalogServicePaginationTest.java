@@ -2,10 +2,12 @@ package com.quickcommerce.product.catalog.service;
 
 import com.quickcommerce.product.catalog.domain.Product;
 import com.quickcommerce.product.catalog.dto.PagedProductResponse;
+import com.quickcommerce.product.catalog.dto.ProductSortOption;
 import com.quickcommerce.product.catalog.repository.CategoryRepository;
 import com.quickcommerce.product.catalog.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -20,9 +22,8 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,12 +49,17 @@ class CatalogServicePaginationTest {
     // ─── helpers ────────────────────────────────────────────────────────────
 
     private Product product(long id, String name, long categoryId) {
+        return product(id, name, categoryId, BigDecimal.TEN, null);
+    }
+
+    private Product product(long id, String name, long categoryId, BigDecimal price, String brand) {
         Product p = new Product();
         p.setId(id);
         p.setSku("SKU-" + id);
         p.setName(name);
         p.setCategoryId(categoryId);
-        p.setBasePrice(BigDecimal.TEN);
+        p.setBasePrice(price);
+        p.setBrand(brand);
         p.setUnitOfMeasure("piece");
         p.setIsActive(true);
         p.setIsAvailable(true);
@@ -78,12 +84,12 @@ class CatalogServicePaginationTest {
         int pageNum = 0, pageSize = 5;
         List<Product> page = products(5, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(0L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(0L)))
                 .thenReturn(Flux.fromIterable(page));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(10L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).hasSize(5);
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -104,12 +110,12 @@ class CatalogServicePaginationTest {
         int pageNum = 1, pageSize = 5;
         List<Product> page = products(5, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(5L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(5L)))
                 .thenReturn(Flux.fromIterable(page));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(10L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     PagedProductResponse.PageMeta meta = response.getMeta();
                     assertThat(meta.getPage()).isEqualTo(1);
@@ -126,12 +132,12 @@ class CatalogServicePaginationTest {
         long categoryId = 99L;
         int pageNum = 0, pageSize = 5;
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(0L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(0L)))
                 .thenReturn(Flux.empty());
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(0L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).isEmpty();
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -150,12 +156,12 @@ class CatalogServicePaginationTest {
         int pageNum = 2, pageSize = 5;
         List<Product> lastPage = products(1, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(10L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(10L)))
                 .thenReturn(Flux.fromIterable(lastPage));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(11L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).hasSize(1);
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -172,12 +178,12 @@ class CatalogServicePaginationTest {
         long categoryId = 12L;
         int pageNum = 100, pageSize = 5;
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(500L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(500L)))
                 .thenReturn(Flux.empty());
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(10L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).isEmpty();
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -195,12 +201,12 @@ class CatalogServicePaginationTest {
         int pageNum = 0, pageSize = 5;
         List<Product> page = products(5, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(0L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(0L)))
                 .thenReturn(Flux.fromIterable(page));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(5L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).hasSize(5);
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -218,12 +224,12 @@ class CatalogServicePaginationTest {
         int pageNum = 0, pageSize = 20;
         List<Product> page = products(1, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(0L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(0L)))
                 .thenReturn(Flux.fromIterable(page));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(1L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).hasSize(1);
                     PagedProductResponse.PageMeta meta = response.getMeta();
@@ -241,12 +247,12 @@ class CatalogServicePaginationTest {
         int pageNum = 50_000_000, pageSize = 50;
         long expectedOffset = (long) pageNum * pageSize; // 2_500_000_000L — overflows int
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(expectedOffset)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(expectedOffset)))
                 .thenReturn(Flux.empty());
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(10L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> assertThat(response.getContent()).isEmpty())
                 .verifyComplete();
     }
@@ -258,16 +264,123 @@ class CatalogServicePaginationTest {
         int pageNum = 1, pageSize = 10;
         List<Product> lastPage = products(3, categoryId);
 
-        when(productRepository.findByCategoryId(eq(categoryId), eq(pageSize), eq(10L)))
+        when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(10L)))
                 .thenReturn(Flux.fromIterable(lastPage));
-        when(productRepository.countActiveAndAvailableByCategoryId(categoryId))
+        when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
                 .thenReturn(Mono.just(13L));
 
-        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize))
+        StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
                 .assertNext(response -> {
                     assertThat(response.getContent()).hasSize(3);
                     assertThat(response.getMeta().getSize()).isEqualTo(10); // requested, not actual
                 })
                 .verifyComplete();
+    }
+
+    // ─── sort & filter tests ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getProductsByCategory with sort and filter")
+    class SortAndFilterTests {
+
+        @Test
+        @DisplayName("No sort, no brand — delegates with null/null and returns correct paged response")
+        void noSortNoBrand_delegatesWithNulls() {
+            long categoryId = 10L;
+            int pageNum = 0, pageSize = 5;
+            List<Product> page = products(3, categoryId);
+
+            when(productRepository.findByCategoryWithFilters(eq(categoryId), isNull(), isNull(), eq(pageSize), eq(0L)))
+                    .thenReturn(Flux.fromIterable(page));
+            when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
+                    .thenReturn(Mono.just(3L));
+
+            StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, null))
+                    .assertNext(response -> {
+                        assertThat(response.getContent()).hasSize(3);
+                        assertThat(response.getMeta().getTotalElements()).isEqualTo(3);
+                        assertThat(response.getMeta().isFirst()).isTrue();
+                        assertThat(response.getMeta().isLast()).isTrue();
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("PRICE_ASC sort, no brand — delegates with PRICE_ASC and null brand")
+        void priceAscSort_noBrand_delegatesCorrectly() {
+            long categoryId = 11L;
+            int pageNum = 0, pageSize = 5;
+            List<Product> page = List.of(
+                    product(1, "Cheap", categoryId, BigDecimal.valueOf(10), null),
+                    product(2, "Expensive", categoryId, BigDecimal.valueOf(100), null)
+            );
+
+            when(productRepository.findByCategoryWithFilters(
+                    eq(categoryId), eq(ProductSortOption.PRICE_ASC), isNull(), eq(pageSize), eq(0L)))
+                    .thenReturn(Flux.fromIterable(page));
+            when(productRepository.countByCategoryWithFilters(eq(categoryId), isNull()))
+                    .thenReturn(Mono.just(2L));
+
+            StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, ProductSortOption.PRICE_ASC, null))
+                    .assertNext(response -> {
+                        assertThat(response.getContent()).hasSize(2);
+                        assertThat(response.getContent().get(0).getBasePrice()).isEqualByComparingTo("10");
+                        assertThat(response.getContent().get(1).getBasePrice()).isEqualByComparingTo("100");
+                        assertThat(response.getMeta().getTotalPages()).isEqualTo(1);
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("PRICE_DESC sort with brand filter — delegates with both params")
+        void priceDescSort_withBrand_delegatesBothParams() {
+            long categoryId = 12L;
+            int pageNum = 0, pageSize = 5;
+            List<Product> page = List.of(
+                    product(3, "Amul Ghee", categoryId, BigDecimal.valueOf(650), "Amul"),
+                    product(1, "Amul Milk", categoryId, BigDecimal.valueOf(65), "Amul")
+            );
+
+            when(productRepository.findByCategoryWithFilters(
+                    eq(categoryId), eq(ProductSortOption.PRICE_DESC), eq("Amul"), eq(pageSize), eq(0L)))
+                    .thenReturn(Flux.fromIterable(page));
+            when(productRepository.countByCategoryWithFilters(eq(categoryId), eq("Amul")))
+                    .thenReturn(Mono.just(2L));
+
+            StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, ProductSortOption.PRICE_DESC, "Amul"))
+                    .assertNext(response -> {
+                        assertThat(response.getContent()).hasSize(2);
+                        assertThat(response.getContent().get(0).getBasePrice()).isEqualByComparingTo("650");
+                        assertThat(response.getContent().get(1).getBasePrice()).isEqualByComparingTo("65");
+                        assertThat(response.getMeta().getTotalElements()).isEqualTo(2);
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("Brand filter only, no sort — delegates with null sort and brand value")
+        void brandFilterOnly_noSort_delegatesNullSort() {
+            long categoryId = 13L;
+            int pageNum = 0, pageSize = 10;
+            List<Product> page = List.of(
+                    product(4, "Tata Paneer", categoryId, BigDecimal.valueOf(120), "Tata"),
+                    product(5, "Tata Curd",   categoryId, BigDecimal.valueOf(55),  "Tata")
+            );
+
+            when(productRepository.findByCategoryWithFilters(
+                    eq(categoryId), isNull(), eq("Tata"), eq(pageSize), eq(0L)))
+                    .thenReturn(Flux.fromIterable(page));
+            when(productRepository.countByCategoryWithFilters(eq(categoryId), eq("Tata")))
+                    .thenReturn(Mono.just(2L));
+
+            StepVerifier.create(catalogService.getProductsByCategory(categoryId, pageNum, pageSize, null, "Tata"))
+                    .assertNext(response -> {
+                        assertThat(response.getContent()).hasSize(2);
+                        assertThat(response.getContent())
+                                .allSatisfy(p -> assertThat(p.getBrand()).isEqualTo("Tata"));
+                        assertThat(response.getMeta().getTotalElements()).isEqualTo(2);
+                    })
+                    .verifyComplete();
+        }
     }
 }

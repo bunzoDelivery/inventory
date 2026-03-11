@@ -6,10 +6,12 @@ import com.quickcommerce.product.exception.InvalidReservationException;
 import com.quickcommerce.product.exception.OptimisticLockingException;
 import com.quickcommerce.product.exception.ReservationNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ServerWebInputException;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -69,6 +71,24 @@ public class GlobalExceptionHandler {
         log.warn("Invalid argument: {}", ex.getMessage());
 
         Map<String, Object> error = createErrorResponse("INVALID_ARGUMENT", ex.getMessage(), HttpStatus.BAD_REQUEST);
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
+    }
+
+    @ExceptionHandler(ServerWebInputException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleServerWebInput(ServerWebInputException ex) {
+        log.warn("Bad request: {}", ex.getReason());
+
+        String message = ex.getReason() != null ? ex.getReason() : "Invalid request input";
+        Map<String, Object> error = createErrorResponse("BAD_REQUEST", message, HttpStatus.BAD_REQUEST);
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
+    }
+
+    @ExceptionHandler(TypeMismatchException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleTypeMismatch(TypeMismatchException ex) {
+        String message = String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getPropertyName());
+        log.warn("Type mismatch: {}", message);
+
+        Map<String, Object> error = createErrorResponse("INVALID_PARAMETER", message, HttpStatus.BAD_REQUEST);
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
     }
 

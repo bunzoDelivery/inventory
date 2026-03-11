@@ -3,6 +3,7 @@ package com.quickcommerce.product.catalog.controller;
 import com.quickcommerce.product.catalog.dto.CreateProductRequest;
 import com.quickcommerce.product.catalog.dto.PagedProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductResponse;
+import com.quickcommerce.product.catalog.dto.ProductSortOption;
 import com.quickcommerce.product.catalog.service.CatalogService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -67,14 +68,18 @@ public class ProductController {
     }
 
     /**
-     * Get products by category with pagination
+     * Get products by category with pagination, optional price sort and brand filter.
+     * sortBy: PRICE_ASC | PRICE_DESC (optional, default: name order)
+     * brand: exact brand name filter (optional)
      */
     @GetMapping("/category/{categoryId}")
     public Mono<PagedProductResponse> getProductsByCategory(
             @PathVariable Long categoryId,
             @RequestParam(defaultValue = "0") @Min(0) int pageNum,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int pageSize) {
-        return catalogService.getProductsByCategory(categoryId, pageNum, pageSize);
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int pageSize,
+            @RequestParam(required = false) ProductSortOption sortBy,
+            @RequestParam(required = false) String brand) {
+        return catalogService.getProductsByCategory(categoryId, pageNum, pageSize, sortBy, brand);
     }
 
     /**

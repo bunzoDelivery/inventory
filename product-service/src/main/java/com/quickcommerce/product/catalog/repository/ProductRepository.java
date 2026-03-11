@@ -12,7 +12,7 @@ import reactor.core.publisher.Mono;
  * capabilities
  */
 @Repository
-public interface ProductRepository extends R2dbcRepository<Product, Long> {
+public interface ProductRepository extends R2dbcRepository<Product, Long>, ProductRepositoryCustom {
 
     /**
      * Find product by SKU

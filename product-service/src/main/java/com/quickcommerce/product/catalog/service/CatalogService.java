@@ -3,6 +3,7 @@ package com.quickcommerce.product.catalog.service;
 import com.quickcommerce.product.catalog.domain.Category;
 import com.quickcommerce.product.catalog.domain.Product;
 import com.quickcommerce.product.catalog.dto.*;
+import com.quickcommerce.product.catalog.dto.ProductSortOption;
 import com.quickcommerce.product.catalog.repository.CategoryRepository;
 import com.quickcommerce.product.catalog.repository.ProductRepository;
 import com.quickcommerce.common.exception.ResourceNotFoundException;
@@ -251,15 +252,17 @@ public class CatalogService {
     }
 
     /**
-     * Get products by category with pagination
+     * Get products by category with pagination, optional sort and brand filter.
+     * Delegates to the dynamic query implementation (R2dbcEntityTemplate + Criteria API).
      */
-    public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize) {
+    public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize,
+                                                             ProductSortOption sortBy, String brand) {
         long offset = (long) pageNum * pageSize;
         return Mono.zip(
-                productRepository.findByCategoryId(categoryId, pageSize, offset)
+                productRepository.findByCategoryWithFilters(categoryId, sortBy, brand, pageSize, offset)
                         .map(ProductResponse::fromDomain)
                         .collectList(),
-                productRepository.countActiveAndAvailableByCategoryId(categoryId)
+                productRepository.countByCategoryWithFilters(categoryId, brand)
         ).map(tuple -> {
             java.util.List<ProductResponse> content = tuple.getT1();
             long total = tuple.getT2();
