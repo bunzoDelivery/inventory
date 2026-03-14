@@ -22,6 +22,7 @@ logging:
     io.r2dbc.mysql: DEBUG
 
 # Fast failsafe for local dev/testing with mock-airtel
+# Payment will succeed in ~5 seconds after /pay is called
 airtel:
-  failsafe-interval-ms: 10000    # 10 seconds
-  failsafe-cutoff-seconds: 10    # check orders idle for >10s
+  failsafe-interval-ms: 3000    # Run every 3 seconds
+  failsafe-cutoff-seconds: 2    # Check orders idle for >2s

@@ -71,8 +71,11 @@ airtel:
   country: ${AIRTEL_COUNTRY:ZM}
   currency: ${AIRTEL_CURRENCY:ZMW}
   token-refresh-interval-ms: ${AIRTEL_TOKEN_REFRESH_MS:2700000}   # 45 minutes
-  failsafe-interval-ms: ${AIRTEL_FAILSAFE_INTERVAL_MS:55000}       # 55 seconds
-  failsafe-cutoff-seconds: ${AIRTEL_FAILSAFE_CUTOFF_SECONDS:60}    # orders idle for >60s
+  # TODO: Tune failsafe timing based on production webhook reliability
+  # Current: checks every 3s for orders idle >2s (fast for testing/dev)
+  # Production recommendation: 55s interval, 60s cutoff (webhooks should arrive in 1-3s normally)
+  failsafe-interval-ms: ${AIRTEL_FAILSAFE_INTERVAL_MS:3000}       # 3 seconds (dev: fast confirmation)
+  failsafe-cutoff-seconds: ${AIRTEL_FAILSAFE_CUTOFF_SECONDS:2}    # orders idle for >2s
 
 # Resilience4j
 resilience4j:
