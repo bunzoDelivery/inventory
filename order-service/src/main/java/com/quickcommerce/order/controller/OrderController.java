@@ -6,19 +6,21 @@ import com.quickcommerce.order.service.OrderService;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.reactor.ratelimiter.operator.RateLimiterOperator;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/api/v1/orders")
 public class OrderController {
@@ -63,20 +65,22 @@ public class OrderController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public Flux<OrderResponse> getCustomerOrders(
+    public Mono<ResponseEntity<PagedOrderResponse>> getCustomerOrders(
             @PathVariable String customerId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return orderService.getCustomerOrders(customerId, page, Math.min(size, 50));
+            @RequestParam(defaultValue = "0") @Min(0) int pageNum,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int pageSize) {
+        return orderService.getCustomerOrders(customerId, pageNum, pageSize)
+                .map(ResponseEntity::ok);
     }
 
     @GetMapping("/store/{storeId}")
-    public Flux<OrderResponse> getStoreOrders(
+    public Mono<ResponseEntity<PagedOrderResponse>> getStoreOrders(
             @PathVariable Long storeId,
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return orderService.getStoreOrders(storeId, status, page, Math.min(size, 50));
+            @RequestParam(defaultValue = "0") @Min(0) int pageNum,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int pageSize) {
+        return orderService.getStoreOrders(storeId, status, pageNum, pageSize)
+                .map(ResponseEntity::ok);
     }
 
     // ─── Customer Actions ──────────────────────────────────────────────────────

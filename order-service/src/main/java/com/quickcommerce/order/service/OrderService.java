@@ -21,7 +21,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -291,23 +290,49 @@ public class OrderService {
                 .flatMap(this::buildFullResponse);
     }
 
-    public Flux<OrderResponse> getCustomerOrders(String customerId, int page, int size) {
-        return orderRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, PageRequest.of(page, size))
-                .flatMap(this::buildFullResponse);
+    public Mono<PagedOrderResponse> getCustomerOrders(String customerId, int pageNum, int pageSize) {
+        return Mono.zip(
+                orderRepo.findByCustomerIdOrderByCreatedAtDesc(customerId, PageRequest.of(pageNum, pageSize))
+                        .flatMap(this::buildFullResponse)
+                        .collectList(),
+                orderRepo.countByCustomerId(customerId)
+        ).map(tuple -> buildPagedResponse(tuple.getT1(), tuple.getT2(), pageNum, pageSize));
     }
 
-    public Flux<OrderResponse> getStoreOrders(Long storeId, String status, int page, int size) {
+    public Mono<PagedOrderResponse> getStoreOrders(Long storeId, String status, int pageNum, int pageSize) {
         if (status != null && !status.isBlank()) {
-            return orderRepo
-                    .findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, status.toUpperCase(),
-                            PageRequest.of(page, size))
-                    .flatMap(this::buildFullResponse);
+            String upperStatus = status.toUpperCase();
+            return Mono.zip(
+                    orderRepo.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, upperStatus, PageRequest.of(pageNum, pageSize))
+                            .flatMap(this::buildFullResponse)
+                            .collectList(),
+                    orderRepo.countByStoreIdAndStatus(storeId, upperStatus)
+            ).map(tuple -> buildPagedResponse(tuple.getT1(), tuple.getT2(), pageNum, pageSize));
         }
-        return orderRepo.findByStoreIdOrderByCreatedAtDesc(storeId, PageRequest.of(page, size))
-                .flatMap(this::buildFullResponse);
+        return Mono.zip(
+                orderRepo.findByStoreIdOrderByCreatedAtDesc(storeId, PageRequest.of(pageNum, pageSize))
+                        .flatMap(this::buildFullResponse)
+                        .collectList(),
+                orderRepo.countByStoreId(storeId)
+        ).map(tuple -> buildPagedResponse(tuple.getT1(), tuple.getT2(), pageNum, pageSize));
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    private PagedOrderResponse buildPagedResponse(List<OrderResponse> content, long total, int pageNum, int pageSize) {
+        int totalPages = (int) Math.ceil((double) total / pageSize);
+        return PagedOrderResponse.builder()
+                .content(content)
+                .meta(PagedOrderResponse.PageMeta.builder()
+                        .page(pageNum)
+                        .size(pageSize)
+                        .totalElements(total)
+                        .totalPages(totalPages)
+                        .first(pageNum == 0)
+                        .last(pageNum >= totalPages - 1 || totalPages == 0)
+                        .build())
+                .build();
+    }
 
     private Mono<OrderResponse> buildFullResponse(Order order) {
         return orderItemRepo.findByOrderId(order.getId())

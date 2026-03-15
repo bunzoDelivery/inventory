@@ -23,9 +23,15 @@ public interface OrderRepository extends R2dbcRepository<Order, Long> {
 
     Flux<Order> findByCustomerIdOrderByCreatedAtDesc(String customerId, Pageable pageable);
 
+    Mono<Long> countByCustomerId(String customerId);
+
     Flux<Order> findByStoreIdOrderByCreatedAtDesc(Long storeId, Pageable pageable);
 
     Flux<Order> findByStoreIdAndStatusOrderByCreatedAtDesc(Long storeId, String status, Pageable pageable);
+
+    Mono<Long> countByStoreId(Long storeId);
+
+    Mono<Long> countByStoreIdAndStatus(Long storeId, String status);
 
     /**
      * Finds Airtel Money orders that:

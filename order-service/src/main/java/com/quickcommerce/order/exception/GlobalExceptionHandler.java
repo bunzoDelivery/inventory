@@ -1,6 +1,7 @@
 package com.quickcommerce.order.exception;
 
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -74,6 +75,17 @@ public class GlobalExceptionHandler {
                         error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid value"
                 ));
         log.warn("Validation failed: {}", errors);
+        return Mono.just(ResponseEntity.badRequest().body(Map.of("errors", errors)));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> errors = ex.getConstraintViolations().stream()
+                .collect(Collectors.toMap(
+                        v -> v.getPropertyPath().toString(),
+                        v -> v.getMessage()
+                ));
+        log.warn("Constraint violation: {}", errors);
         return Mono.just(ResponseEntity.badRequest().body(Map.of("errors", errors)));
     }
 

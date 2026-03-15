@@ -5,6 +5,7 @@ import com.quickcommerce.product.exception.InventoryNotFoundException;
 import com.quickcommerce.product.exception.InvalidReservationException;
 import com.quickcommerce.product.exception.OptimisticLockingException;
 import com.quickcommerce.product.exception.ReservationNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Global exception handler for inventory service
@@ -80,6 +82,16 @@ public class GlobalExceptionHandler {
 
         String message = ex.getReason() != null ? ex.getReason() : "Invalid request input";
         Map<String, Object> error = createErrorResponse("BAD_REQUEST", message, HttpStatus.BAD_REQUEST);
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .collect(Collectors.joining(", "));
+        log.warn("Validation failed: {}", message);
+        Map<String, Object> error = createErrorResponse("VALIDATION_ERROR", message, HttpStatus.BAD_REQUEST);
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
     }
 
