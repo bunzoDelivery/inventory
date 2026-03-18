@@ -7,6 +7,7 @@ import com.quickcommerce.order.dto.OrderResponse;
 import com.quickcommerce.order.payment.domain.PaymentAttempt;
 import com.quickcommerce.order.payment.domain.PaymentAttemptStatus;
 import com.quickcommerce.order.payment.dto.PaymentStatusResponse;
+import com.quickcommerce.order.payment.gateway.GatewayName;
 import okhttp3.mockwebserver.MockResponse;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,11 +24,13 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end integration tests for the Airtel Money payment flow.
+ * End-to-end integration tests for the mobile money payment flow.
+ * Runs with MockAirtelMoneyClient (mock-airtel profile) and AirtelDirectGateway
+ * active (payment.active-gateway=AIRTEL_DIRECT).
  *
  * Uses:
  * - Real MySQL via Testcontainers (shared with other integration tests)
- * - MockAirtelMoneyClient (active on default mock-airtel profile)
+ * - MockAirtelMoneyClient (active on mock-airtel profile)
  * - MockWebServer for product-service and inventory-service
  * - NoOpAirtelWebhookValidator (always passes)
  * - NoOpNotificationClient (no HTTP calls)
@@ -52,6 +55,8 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
     static void configureClientProperties(DynamicPropertyRegistry registry) {
         registry.add("client.product-service.url", () -> mockProductService.url("/").toString());
         registry.add("client.inventory-service.url", () -> mockInventoryService.url("/").toString());
+        // Use Airtel Direct for these tests (mock-airtel profile)
+        registry.add("payment.active-gateway", () -> "AIRTEL_DIRECT");
     }
 
     @BeforeEach
@@ -64,45 +69,39 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Full Airtel TS flow: create order → pay → webhook TS → order CONFIRMED")
     void airtelPayment_webhookTS_shouldConfirmOrder() throws JsonProcessingException {
-        // Given: create a PENDING_PAYMENT Airtel order
         String orderUuid = createAirtelOrder("CUST_TS");
 
-        // When: initiate payment
         webTestClient.post()
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_TS")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(PaymentStatusResponse.class)
                 .value(resp -> {
                     assertThat(resp.getPushStatus()).isEqualTo("PUSH_SENT");
                     assertThat(resp.getPaymentPhone()).isEqualTo("097****567");
+                    assertThat(resp.getMobileNetwork()).isEqualTo("AIRTEL");
                 });
 
-        // Read the Airtel transaction ID saved by MockAirtelMoneyClient
         Order order = orderRepository.findByOrderUuid(orderUuid).block();
         assertThat(order).isNotNull();
-        String txId = order.getAirtelTransactionId();
+        String txId = order.getGatewayTransactionId();
         assertThat(txId).startsWith("MOCK-");
 
-        // Enqueue inventory confirmReservation (called by processPaymentSuccess)
         mockInventoryService.enqueue(new MockResponse().setResponseCode(200));
 
-        // When: Airtel POSTs a TS webhook
-        String webhookBody = buildWebhookJson(txId, "TS");
+        String webhookBody = buildAirtelWebhookJson(txId, "TS");
         webTestClient.post()
                 .uri("/api/v1/webhooks/airtel")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(webhookBody)
                 .exchange()
-                // Airtel webhook always returns 200 regardless of outcome
                 .expectStatus().isOk()
                 .expectBody(Map.class)
                 .value(resp -> assertThat(resp.get("status")).isEqualTo("ACCEPTED"));
 
-        // Then: poll payment status → CONFIRMED
         webTestClient.get()
                 .uri("/api/v1/orders/{uuid}/payment-status", orderUuid)
                 .header("X-Customer-Id", "CUST_TS")
@@ -115,42 +114,38 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
                     assertThat(resp.getPaymentStatus()).isEqualTo("PAID");
                 });
 
-        // And: verify payment attempt in DB
         PaymentAttempt attempt = paymentAttemptRepository.findByOrderUuid(orderUuid).block();
         assertThat(attempt).isNotNull();
         assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCESS);
-        assertThat(attempt.getAirtelRef()).isEqualTo(txId);
+        assertThat(attempt.getGatewayRef()).isEqualTo(txId);
+        assertThat(attempt.getGatewayUsed()).isEqualTo(GatewayName.AIRTEL_DIRECT);
         assertThat(attempt.getResolvedAt()).isNotNull();
     }
 
     @Test
     @DisplayName("Full Airtel TF flow: create order → pay → webhook TF → order CANCELLED")
     void airtelPayment_webhookTF_shouldCancelOrder() throws JsonProcessingException {
-        // Given
         String orderUuid = createAirtelOrder("CUST_TF");
 
         webTestClient.post()
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_TF")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isOk();
 
-        String txId = orderRepository.findByOrderUuid(orderUuid).block().getAirtelTransactionId();
+        String txId = orderRepository.findByOrderUuid(orderUuid).block().getGatewayTransactionId();
 
-        // Enqueue inventory cancelReservations (called by processPaymentFailure)
         mockInventoryService.enqueue(new MockResponse().setResponseCode(200));
 
-        // When: Airtel sends a TF (failure) webhook
         webTestClient.post()
                 .uri("/api/v1/webhooks/airtel")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(buildWebhookJson(txId, "TF"))
+                .bodyValue(buildAirtelWebhookJson(txId, "TF"))
                 .exchange()
                 .expectStatus().isOk();
 
-        // Then: order is CANCELLED and payment status is FAILED
         webTestClient.get()
                 .uri("/api/v1/orders/{uuid}/payment-status", orderUuid)
                 .header("X-Customer-Id", "CUST_TF")
@@ -163,7 +158,6 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
                     assertThat(resp.getPaymentStatus()).isEqualTo("FAILED");
                 });
 
-        // And: attempt is marked FAILED
         PaymentAttempt attempt = paymentAttemptRepository.findByOrderUuid(orderUuid).block();
         assertThat(attempt).isNotNull();
         assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
@@ -197,7 +191,7 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_POLL2")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isOk();
 
@@ -222,9 +216,8 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
 
         webTestClient.post()
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
-                // No X-Customer-Id header
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isBadRequest();
     }
@@ -238,7 +231,7 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_THIEF")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody(Map.class)
@@ -264,35 +257,43 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
     void initiatePayment_duplicatePush_shouldReturn400() throws JsonProcessingException {
         String orderUuid = createAirtelOrder("CUST_DEDUP");
 
-        // First push — should succeed
         webTestClient.post()
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_DEDUP")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isOk();
 
-        // Second push — should be blocked
         webTestClient.post()
                 .uri("/api/v1/orders/{uuid}/pay", orderUuid)
                 .header("X-Customer-Id", "CUST_DEDUP")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("paymentPhone", "0971234567"))
+                .bodyValue(Map.of("paymentPhone", "0971234567", "mobileNetwork", "AIRTEL"))
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody(Map.class)
                 .value(body -> assertThat((String) body.get("error")).contains("already initiated"));
     }
 
+    // ─── Validation ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("POST /pay with missing mobileNetwork — returns HTTP 400")
+    void initiatePayment_missingMobileNetwork_shouldReturn400() throws JsonProcessingException {
+        String orderUuid = createAirtelOrder("CUST_NONET");
+
+        webTestClient.post()
+                .uri("/api/v1/orders/{uuid}/pay", orderUuid)
+                .header("X-Customer-Id", "CUST_NONET")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("paymentPhone", "0971234567"))  // no mobileNetwork
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    /**
-     * Creates an AIRTEL_MONEY order (PENDING_PAYMENT status) for the given customer.
-     * Enqueues the required product-service and inventory-service mock responses.
-     *
-     * @return the orderUuid of the created order
-     */
     private String createAirtelOrder(String customerId) throws JsonProcessingException {
         mockProductService.enqueue(new MockResponse()
                 .setBody(objectMapper.writeValueAsString(List.of(mockPrice("SKU1", 100.0))))
@@ -315,7 +316,7 @@ class PaymentFlowIntegrationTest extends BaseIntegrationTest {
         return response.getOrderId();
     }
 
-    private String buildWebhookJson(String txId, String statusCode) {
+    private String buildAirtelWebhookJson(String txId, String statusCode) {
         return String.format(
                 "{\"transaction\":{\"id\":\"%s\",\"status_code\":\"%s\",\"message\":\"Test\"}}",
                 txId, statusCode);

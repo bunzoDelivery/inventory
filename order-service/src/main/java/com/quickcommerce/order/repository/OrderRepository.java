@@ -15,7 +15,7 @@ public interface OrderRepository extends R2dbcRepository<Order, Long> {
 
     Mono<Order> findByOrderUuid(String orderUuid);
 
-    Mono<Order> findByAirtelTransactionId(String airtelTransactionId);
+    Mono<Order> findByGatewayTransactionId(String gatewayTransactionId);
 
     Mono<Order> findByIdempotencyKey(String idempotencyKey);
 
@@ -34,16 +34,18 @@ public interface OrderRepository extends R2dbcRepository<Order, Long> {
     Mono<Long> countByStoreIdAndStatus(Long storeId, String status);
 
     /**
-     * Finds Airtel Money orders that:
+     * Finds mobile-money orders that:
      * - Are in PENDING_PAYMENT status
-     * - Have an airtelTransactionId (push was sent)
+     * - Have a gateway_transaction_id (push was sent)
      * - Were last updated before the cutoff (no webhook received yet)
-     * Used by AirtelFailsafeScheduler.
+     *
+     * Used by GenericPaymentFailsafeScheduler as a secondary safety net.
+     * The primary failsafe query runs against payment_attempts directly.
      */
     @Query("SELECT * FROM customer_orders " +
             "WHERE status = :status " +
-            "AND airtel_transaction_id IS NOT NULL " +
+            "AND gateway_transaction_id IS NOT NULL " +
             "AND updated_at < :cutoff " +
             "ORDER BY updated_at ASC")
-    Flux<Order> findStuckAirtelOrders(String status, LocalDateTime cutoff);
+    Flux<Order> findStuckMobileMoneyOrders(String status, LocalDateTime cutoff);
 }

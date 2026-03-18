@@ -105,15 +105,6 @@ public class OrderController {
                 .map(ResponseEntity::ok);
     }
 
-    // ─── Dev / QA Only ─────────────────────────────────────────────────────────
-
-    @PostMapping("/{orderUuid}/pay-mock")
-    public Mono<ResponseEntity<OrderResponse>> mockPayment(@PathVariable String orderUuid) {
-        log.info("Mock payment for order: {}", orderUuid);
-        return orderService.mockPayment(orderUuid)
-                .map(ResponseEntity::ok);
-    }
-
     // ─── Exception Handlers ────────────────────────────────────────────────────
 
     @ExceptionHandler(RequestNotPermitted.class)

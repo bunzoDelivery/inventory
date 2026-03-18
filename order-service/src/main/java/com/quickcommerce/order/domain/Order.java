@@ -50,9 +50,9 @@ public class Order {
     @Version
     private Long version;
 
-    // Airtel Money payment fields
-    private String paymentPhone; // MSISDN sent to Airtel for STK push
-    private String airtelTransactionId; // Airtel-assigned transaction ID (for failsafe polling)
+    // Mobile money payment fields
+    private String paymentPhone; // MSISDN sent to gateway for USSD push
+    private String gatewayTransactionId; // Gateway-assigned transaction ID (for failsafe polling and webhook fallback)
 
     @CreatedDate
     private LocalDateTime createdAt;

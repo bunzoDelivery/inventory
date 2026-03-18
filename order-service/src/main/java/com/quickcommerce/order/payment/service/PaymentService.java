@@ -9,20 +9,18 @@ import com.quickcommerce.order.domain.PaymentStatus;
 import com.quickcommerce.order.exception.InvalidOrderStateException;
 import com.quickcommerce.order.exception.OrderNotFoundException;
 import com.quickcommerce.order.exception.PaymentGatewayException;
-import com.quickcommerce.order.payment.client.AirtelMoneyClient;
-import com.quickcommerce.order.payment.client.AirtelPushRequest;
 import com.quickcommerce.order.payment.domain.PaymentAttempt;
 import com.quickcommerce.order.payment.domain.PaymentAttemptStatus;
 import com.quickcommerce.order.payment.dto.InitiatePaymentRequest;
 import com.quickcommerce.order.payment.dto.PaymentStatusResponse;
+import com.quickcommerce.order.payment.gateway.GatewayPaymentRequest;
+import com.quickcommerce.order.payment.gateway.PaymentGatewayRouter;
 import com.quickcommerce.order.payment.repository.PaymentAttemptRepository;
-import com.quickcommerce.order.payment.webhook.AirtelWebhookPayload;
 import com.quickcommerce.order.repository.OrderEventRepository;
 import com.quickcommerce.order.repository.OrderRepository;
 import com.quickcommerce.order.util.PhoneUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -39,105 +37,100 @@ public class PaymentService {
     private final OrderRepository orderRepo;
     private final OrderEventRepository orderEventRepo;
     private final PaymentAttemptRepository paymentAttemptRepo;
-    private final AirtelMoneyClient airtelClient;
+    private final PaymentGatewayRouter gatewayRouter;
     private final InventoryClient inventoryClient;
     private final NotificationClient notificationClient;
     private final TransactionalOperator transactionalOperator;
 
-    @Value("${airtel.country:ZM}")
-    private String country;
-
-    @Value("${airtel.currency:ZMW}")
-    private String currency;
-
     // ─── Initiate Payment ─────────────────────────────────────────────────────
 
     /**
-     * Initiates an Airtel Money USSD STK push for an order in PENDING_PAYMENT status.
+     * Initiates a USSD push for an order in PENDING_PAYMENT status.
+     * The active gateway is resolved from config via {@link PaymentGatewayRouter}.
      * Called by: POST /api/v1/orders/{uuid}/pay
-     *
-     * @param customerId the authenticated customer ID (from X-Customer-Id header)
      */
     public Mono<PaymentStatusResponse> initiatePayment(String orderUuid, String customerId,
             InitiatePaymentRequest req) {
-        log.info("Initiating Airtel payment for order={}, phone={}", orderUuid,
-                PhoneUtils.maskPhone(req.getPaymentPhone()));
+        log.info("Initiating payment for order={}, phone={}, network={}, gateway={}",
+                orderUuid, PhoneUtils.maskPhone(req.getPaymentPhone()),
+                req.getMobileNetwork(), gatewayRouter.resolve().getGatewayName());
 
         return orderRepo.findByOrderUuid(orderUuid)
                 .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
                 .flatMap(order -> {
 
-                    // Auth: verify the caller owns this order
                     if (!order.getCustomerId().equals(customerId)) {
                         return Mono.error(new InvalidOrderStateException(
                                 "Order does not belong to this customer"));
                     }
 
-                    // Guard: only PENDING_PAYMENT orders can be paid
                     if (!OrderStatus.PENDING_PAYMENT.name().equals(order.getStatus())) {
                         return Mono.error(new InvalidOrderStateException(
                                 "Order " + orderUuid + " is in status " + order.getStatus() +
-                                        " and cannot initiate payment. Expected: PENDING_PAYMENT"));
+                                " and cannot initiate payment. Expected: PENDING_PAYMENT"));
                     }
 
                     if (order.paymentMethodEnum().isCashOnDelivery()) {
-                        return Mono.error(
-                                new InvalidOrderStateException("COD orders cannot initiate Airtel payment"));
+                        return Mono.error(new InvalidOrderStateException(
+                                "COD orders cannot initiate mobile money payment"));
                     }
 
-                    // Guard: reject if a push was already initiated for this order
+                    String networkMismatch = validatePhoneNetwork(
+                            req.getPaymentPhone(), req.getMobileNetwork());
+                    if (networkMismatch != null) {
+                        return Mono.error(new InvalidOrderStateException(networkMismatch));
+                    }
+
                     return paymentAttemptRepo.findByOrderUuid(orderUuid)
                             .flatMap(existing -> Mono.<PaymentStatusResponse>error(
                                     new InvalidOrderStateException(
                                             "Payment already initiated for this order. " +
-                                                    "Awaiting PIN confirmation.")))
+                                            "Awaiting PIN confirmation.")))
                             .switchIfEmpty(Mono.defer(() -> proceedWithPush(order, req)));
                 });
     }
 
     private Mono<PaymentStatusResponse> proceedWithPush(Order order, InitiatePaymentRequest req) {
         String orderUuid = order.getOrderUuid();
+        var gateway = gatewayRouter.resolve();
 
         order.setPaymentPhone(req.getPaymentPhone());
 
-        AirtelPushRequest pushReq = AirtelPushRequest.builder()
+        GatewayPaymentRequest gatewayReq = GatewayPaymentRequest.builder()
+                .orderUuid(orderUuid)
                 .msisdn(req.getPaymentPhone())
-                .reference(orderUuid)
                 .amount(order.getGrandTotal())
-                .country(country)
-                .currency(currency)
+                .currency("ZMW")
+                .mobileNetwork(req.getMobileNetwork())
                 .build();
+
+        // For PawaPay the depositId equals our orderUuid (we choose it) — pre-populate so
+        // the failsafe can find this attempt even if the post-gateway saves fail.
+        // For Airtel Direct the ref is assigned by Airtel and only known after the push call.
+        String preKnownRef = gateway.getGatewayName() == com.quickcommerce.order.payment.gateway.GatewayName.PAWAPAY
+                ? orderUuid : null;
 
         PaymentAttempt attempt = PaymentAttempt.builder()
                 .orderUuid(orderUuid)
                 .paymentPhone(req.getPaymentPhone())
+                .gatewayUsed(gateway.getGatewayName())
+                .mobileNetwork(req.getMobileNetwork())
+                .gatewayRef(preKnownRef)
                 .status(PaymentAttemptStatus.INITIATED)
                 .initiatedAt(LocalDateTime.now())
                 .build();
 
         return paymentAttemptRepo.save(attempt)
-                // Backstop for concurrent requests: both passed the findByOrderUuid check,
-                // but only one INSERT can succeed on the UNIQUE(order_uuid) constraint.
+                // DB UNIQUE(order_uuid) backstop: blocks concurrent duplicate pushes
                 .onErrorResume(DataIntegrityViolationException.class, e -> {
                     log.warn("Duplicate payment attempt blocked by DB constraint for order={}", orderUuid);
                     return Mono.error(new InvalidOrderStateException(
                             "Payment already initiated for this order. Awaiting PIN confirmation."));
                 })
-                .flatMap(savedAttempt -> airtelClient.initiateUssdPush(pushReq)
-                        .flatMap(pushResp -> {
-                            if (pushResp.getAirtelTransactionId() == null
-                                    || pushResp.getAirtelTransactionId().isBlank()) {
-                                // Airtel returned a response with no transaction ID — treat as failure
-                                savedAttempt.setStatus(PaymentAttemptStatus.FAILED);
-                                savedAttempt.setFailureReason("Airtel returned no transaction ID");
-                                savedAttempt.setResolvedAt(LocalDateTime.now());
-                                return paymentAttemptRepo.save(savedAttempt)
-                                        .then(Mono.error(new PaymentGatewayException(
-                                                "Airtel did not return a transaction ID. Please try COD or contact support.")));
-                            }
-
-                            order.setAirtelTransactionId(pushResp.getAirtelTransactionId());
-                            savedAttempt.setAirtelRef(pushResp.getAirtelTransactionId());
+                .flatMap(savedAttempt -> gateway.initiatePayment(gatewayReq)
+                        .flatMap(gatewayResp -> {
+                            order.setGatewayTransactionId(gatewayResp.getGatewayRef());
+                            savedAttempt.setGatewayRef(gatewayResp.getGatewayRef());
 
                             return orderRepo.save(order)
                                     .then(paymentAttemptRepo.save(savedAttempt))
@@ -146,93 +139,93 @@ public class PaymentService {
                                             .orderStatus(order.getStatus())
                                             .paymentStatus(order.getPaymentStatus())
                                             .paymentPhone(PhoneUtils.maskPhone(req.getPaymentPhone()))
+                                            .mobileNetwork(req.getMobileNetwork().name())
                                             .pushStatus("PUSH_SENT")
-                                            .message("Airtel Money prompt sent to "
+                                            .message("Payment prompt sent to "
                                                     + PhoneUtils.maskPhone(req.getPaymentPhone())
                                                     + ". Please enter your PIN.")
                                             .build()));
                         })
                         .onErrorResume(e -> {
                             if (e instanceof InvalidOrderStateException) return Mono.error(e);
-                            // STK push failed (Airtel API down, invalid number, etc.)
-                            log.error("Airtel STK push failed for order={}", orderUuid, e);
+                            log.error("Payment push failed for order={} via gateway={}",
+                                    orderUuid, gateway.getGatewayName(), e);
                             savedAttempt.setStatus(PaymentAttemptStatus.FAILED);
-                            savedAttempt.setFailureReason("STK push failed: " + e.getMessage());
+                            savedAttempt.setFailureReason("Push failed: " + e.getMessage());
                             savedAttempt.setResolvedAt(LocalDateTime.now());
                             return paymentAttemptRepo.save(savedAttempt)
-                                    .then(Mono.error(new PaymentGatewayException(
-                                            "Failed to initiate Airtel payment. Please try COD or contact support.",
-                                            e)));
+                                    .then(Mono.error(e instanceof PaymentGatewayException ? e :
+                                            new PaymentGatewayException(
+                                                    "Failed to initiate payment. Please try COD or contact support.", e)));
                         }));
     }
 
-    // ─── Handle Webhook ───────────────────────────────────────────────────────
+    // ─── Webhook / Result Processing ──────────────────────────────────────────
 
     /**
-     * Processes Airtel's webhook callback after customer enters PIN.
-     * Called by: POST /api/v1/webhooks/airtel
+     * Generic entry point for all payment provider webhooks.
+     * Both Airtel and PawaPay controllers parse their vendor formats and call this.
+     * Always returns {@code Mono.empty()} — the controller sends 200 OK regardless.
      *
-     * Always returns Mono.empty() — the controller always sends 200 OK to Airtel
-     * regardless of processing outcome, to prevent Airtel from retrying.
+     * @param gatewayRef  the provider's transaction/deposit ID
+     * @param isSuccess   true if the provider reported a successful payment
+     * @param statusCode  raw provider status string (for audit / cancel reason)
+     * @param rawBody     raw webhook JSON body (stored for reconciliation)
+     * @param actor       who triggered this result, e.g. "PAWAPAY_WEBHOOK"
      */
-    public Mono<Void> handleWebhook(AirtelWebhookPayload payload, String rawBody) {
-        String transactionId = payload.getTransactionId();
-        String statusCode = payload.getStatusCode();
-        boolean isSuccess = payload.isSuccess();
+    public Mono<Void> processPaymentResult(String gatewayRef, boolean isSuccess,
+            String statusCode, String rawBody, String actor) {
 
-        log.info("Airtel webhook received — txId={}, status={}", transactionId, statusCode);
+        log.info("Processing payment result — gatewayRef={}, success={}, status={}, actor={}",
+                gatewayRef, isSuccess, statusCode, actor);
 
-        if (transactionId == null || transactionId.isBlank()) {
-            log.warn("Airtel webhook missing transactionId — ignoring");
+        if (gatewayRef == null || gatewayRef.isBlank()) {
+            log.warn("Payment result missing gatewayRef — ignoring");
             return Mono.empty();
         }
 
-        return paymentAttemptRepo.findByAirtelRef(transactionId)
+        return paymentAttemptRepo.findByGatewayRef(gatewayRef)
                 .flatMap(attempt -> orderRepo.findByOrderUuid(attempt.getOrderUuid())
-                        .flatMap(order -> processWebhookForOrder(order, attempt, isSuccess, statusCode, rawBody))
-                        // Emit a sentinel so switchIfEmpty below knows the attempt WAS found
-                        // (processWebhookForOrder returns Mono<Void> which emits no element)
+                        .flatMap(order -> processResultForOrder(order, attempt, isSuccess, statusCode, rawBody, actor))
                         .thenReturn(Boolean.TRUE))
-                // Fallback: attempt not yet persisted (webhook arrived before initiatePayment saves completed)
-                .switchIfEmpty(Mono.defer(() -> orderRepo.findByAirtelTransactionId(transactionId)
-                        .flatMap(order -> {
-                            if (!OrderStatus.PENDING_PAYMENT.name().equals(order.getStatus())) {
-                                log.info("Fallback webhook: order {} already in status {}. Ignoring.",
-                                        order.getOrderUuid(), order.getStatus());
-                                return Mono.just(Boolean.FALSE);
-                            }
-                            log.info("Fallback webhook path for order={}: no attempt record found, " +
-                                    "processing directly from order", order.getOrderUuid());
-                            PaymentAttempt synth = buildSyntheticAttempt(order, transactionId, rawBody);
-                            return (isSuccess
-                                    ? processPaymentSuccess(order, synth)
-                                    : processPaymentFailure(order, synth, "Airtel reported: " + statusCode))
-                                    .thenReturn(Boolean.FALSE);
-                        })
-                        .switchIfEmpty(Mono.fromRunnable(() -> log.warn(
-                                "No order or attempt found for Airtel txId={}. " +
-                                        "Possible duplicate or stale webhook.", transactionId))
-                                .thenReturn(Boolean.FALSE))))
+                // Fallback: attempt not yet committed when webhook arrived (race condition)
+                .switchIfEmpty(Mono.defer(() ->
+                        orderRepo.findByGatewayTransactionId(gatewayRef)
+                                .flatMap(order -> {
+                                    if (!OrderStatus.PENDING_PAYMENT.name().equals(order.getStatus())) {
+                                        log.info("Fallback webhook: order {} already {}. Ignoring.",
+                                                order.getOrderUuid(), order.getStatus());
+                                        return Mono.just(Boolean.FALSE);
+                                    }
+                                    log.info("Fallback webhook path for order={}: no attempt found, " +
+                                            "processing directly from order", order.getOrderUuid());
+                                    PaymentAttempt synth = buildSyntheticAttempt(order, gatewayRef, rawBody);
+                                    return (isSuccess
+                                            ? processPaymentSuccess(order, synth)
+                                            : processPaymentFailure(order, synth, "Provider reported: " + statusCode))
+                                            .thenReturn(Boolean.FALSE);
+                                })
+                                .switchIfEmpty(Mono.fromRunnable(() ->
+                                        log.warn("No order or attempt found for gatewayRef={}. " +
+                                                "Possible duplicate or stale webhook.", gatewayRef))
+                                        .thenReturn(Boolean.FALSE))))
                 .then();
     }
 
-    private Mono<Void> processWebhookForOrder(Order order, PaymentAttempt attempt,
-            boolean isSuccess, String statusCode, String rawBody) {
-        // Idempotency guard: don't re-process if already terminal
+    private Mono<Void> processResultForOrder(Order order, PaymentAttempt attempt,
+            boolean isSuccess, String statusCode, String rawBody, String actor) {
         if (!OrderStatus.PENDING_PAYMENT.name().equals(order.getStatus())) {
-            log.info("Order {} already in status {}. Ignoring duplicate webhook.",
-                    order.getOrderUuid(), order.getStatus());
+            log.info("Order {} already {}. Ignoring duplicate webhook from {}.",
+                    order.getOrderUuid(), order.getStatus(), actor);
             return Mono.empty();
         }
 
         attempt.setRawWebhook(rawBody);
         attempt.setResolvedAt(LocalDateTime.now());
 
-        if (isSuccess) {
-            return processPaymentSuccess(order, attempt);
-        } else {
-            return processPaymentFailure(order, attempt, "Airtel reported: " + statusCode);
-        }
+        return isSuccess
+                ? processPaymentSuccess(order, attempt)
+                : processPaymentFailure(order, attempt, "Provider reported: " + statusCode);
     }
 
     // ─── Payment Status (for polling) ─────────────────────────────────────────
@@ -245,7 +238,6 @@ public class PaymentService {
         return orderRepo.findByOrderUuid(orderUuid)
                 .switchIfEmpty(Mono.error(new OrderNotFoundException("Order not found: " + orderUuid)))
                 .flatMap(order -> {
-                    // Auth: verify the caller owns this order
                     if (!order.getCustomerId().equals(customerId)) {
                         return Mono.error(new InvalidOrderStateException(
                                 "Order does not belong to this customer"));
@@ -258,20 +250,32 @@ public class PaymentService {
 
                     String pushStatus = switch (OrderStatus.valueOf(order.getStatus())) {
                         case PENDING_PAYMENT ->
-                            order.getAirtelTransactionId() != null ? "PUSH_SENT" : "AWAITING_PUSH";
+                                order.getGatewayTransactionId() != null ? "PUSH_SENT" : "AWAITING_PUSH";
                         case CONFIRMED -> "CONFIRMED";
                         case CANCELLED -> "FAILED";
-                        default -> "UNKNOWN";
+                        // Post-payment statuses — payment was confirmed
+                        default -> "CONFIRMED";
                     };
 
-                    return Mono.just(PaymentStatusResponse.builder()
-                            .orderUuid(orderUuid)
-                            .orderStatus(order.getStatus())
-                            .paymentStatus(order.getPaymentStatus())
-                            .paymentPhone(PhoneUtils.maskPhone(order.getPaymentPhone()))
-                            .pushStatus(pushStatus)
-                            .message(pushStatusMessage(order.getStatus()))
-                            .build());
+                    return paymentAttemptRepo.findByOrderUuid(orderUuid)
+                            .map(attempt -> PaymentStatusResponse.builder()
+                                    .orderUuid(orderUuid)
+                                    .orderStatus(order.getStatus())
+                                    .paymentStatus(order.getPaymentStatus())
+                                    .paymentPhone(PhoneUtils.maskPhone(order.getPaymentPhone()))
+                                    .mobileNetwork(attempt.getMobileNetwork() != null
+                                            ? attempt.getMobileNetwork().name() : null)
+                                    .pushStatus(pushStatus)
+                                    .message(pushStatusMessage(order.getStatus()))
+                                    .build())
+                            .defaultIfEmpty(PaymentStatusResponse.builder()
+                                    .orderUuid(orderUuid)
+                                    .orderStatus(order.getStatus())
+                                    .paymentStatus(order.getPaymentStatus())
+                                    .paymentPhone(PhoneUtils.maskPhone(order.getPaymentPhone()))
+                                    .pushStatus(pushStatus)
+                                    .message(pushStatusMessage(order.getStatus()))
+                                    .build());
                 });
     }
 
@@ -279,7 +283,7 @@ public class PaymentService {
 
     /**
      * Transitions order to CONFIRMED. Commits inventory. Fires notification.
-     * Called by webhook handler and AirtelFailsafeScheduler.
+     * Called by webhook handler and GenericPaymentFailsafeScheduler.
      */
     public Mono<Void> processPaymentSuccess(Order order, PaymentAttempt attempt) {
         log.info("Payment SUCCESS for order={}", order.getOrderUuid());
@@ -292,15 +296,13 @@ public class PaymentService {
             attempt.setResolvedAt(LocalDateTime.now());
         }
 
-        // Save order + attempt + event atomically, then confirm inventory outside the transaction
         return orderRepo.save(order)
                 .flatMap(saved -> paymentAttemptRepo.save(attempt)
                         .then(orderEventRepo.save(
                                 OrderEvent.paymentReceived(saved.getId(), saved.paymentMethodEnum())))
-                        .as(transactionalOperator::transactional)
                         .thenReturn(saved))
+                .as(transactionalOperator::transactional)
                 .onErrorResume(OptimisticLockingFailureException.class, e -> {
-                    // Another thread (webhook or failsafe) already processed this order — no-op
                     log.info("Optimistic lock conflict on order={}: already processed by concurrent handler",
                             order.getOrderUuid());
                     return Mono.empty();
@@ -321,7 +323,7 @@ public class PaymentService {
 
     /**
      * Transitions order to CANCELLED. Releases inventory reservation.
-     * Called by webhook handler and AirtelFailsafeScheduler.
+     * Called by webhook handler and GenericPaymentFailsafeScheduler.
      */
     public Mono<Void> processPaymentFailure(Order order, PaymentAttempt attempt, String reason) {
         log.info("Payment FAILED for order={} — reason={}", order.getOrderUuid(), reason);
@@ -337,13 +339,18 @@ public class PaymentService {
             attempt.setResolvedAt(LocalDateTime.now());
         }
 
+        // Derive actor from the gateway that processed this attempt
+        String actor = attempt.getGatewayUsed() != null
+                ? attempt.getGatewayUsed().name() + "_WEBHOOK"
+                : "SYSTEM";
+
         return orderRepo.save(order)
                 .flatMap(saved -> paymentAttemptRepo.save(attempt)
                         .then(orderEventRepo.save(
                                 OrderEvent.cancelled(saved.getId(), previous,
-                                        "PAYMENT_FAILED: " + reason, "AIRTEL_WEBHOOK")))
-                        .as(transactionalOperator::transactional)
+                                        "PAYMENT_FAILED: " + reason, actor)))
                         .thenReturn(saved))
+                .as(transactionalOperator::transactional)
                 .onErrorResume(OptimisticLockingFailureException.class, e -> {
                     log.info("Optimistic lock conflict on order={}: already processed by concurrent handler",
                             order.getOrderUuid());
@@ -359,23 +366,56 @@ public class PaymentService {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private PaymentAttempt buildSyntheticAttempt(Order order, String transactionId, String rawBody) {
+    private PaymentAttempt buildSyntheticAttempt(Order order, String gatewayRef, String rawBody) {
+        // gatewayUsed is unknown in this fallback path — derive from active gateway as best-effort.
+        // This only happens when a webhook arrives before the attempt row is committed (rare race).
+        var gateway = gatewayRouter.resolve();
         return PaymentAttempt.builder()
                 .orderUuid(order.getOrderUuid())
                 .paymentPhone(order.getPaymentPhone())
-                .airtelRef(transactionId)
+                .gatewayRef(gatewayRef)
+                .gatewayUsed(gateway.getGatewayName())
                 .status(PaymentAttemptStatus.INITIATED)
                 .initiatedAt(order.getUpdatedAt())
                 .rawWebhook(rawBody)
                 .build();
     }
 
+    /**
+     * Validates that the submitted mobileNetwork matches the phone number prefix.
+     * Zambia: Airtel=097x/077x, MTN=096x/076x, Zamtel=095x
+     * Indian numbers (for dev/test) skip this check.
+     * Returns an error message string if mismatched, null if valid.
+     */
+    private String validatePhoneNetwork(String phone, com.quickcommerce.order.domain.MobileNetwork network) {
+        if (phone == null || network == null) return null;
+        String digits = phone.replaceAll("\\D", "");
+        // Strip country code to get local prefix
+        String local = digits.startsWith("260") ? digits.substring(3)
+                     : digits.startsWith("0")   ? digits.substring(1)
+                     : digits;
+        // Indian numbers (for dev/test) — skip network check
+        if (local.length() == 10 && local.charAt(0) >= '6') return null;
+        if (local.length() < 2) return null;
+        String prefix2 = local.substring(0, 2);
+        boolean isAirtelPrefix = prefix2.equals("97") || prefix2.equals("77");
+        boolean isMtnPrefix    = prefix2.equals("96") || prefix2.equals("76");
+        return switch (network) {
+            case AIRTEL -> isMtnPrefix
+                    ? "Phone number " + PhoneUtils.maskPhone(phone) + " appears to be an MTN number. Select MTN as the network."
+                    : null;
+            case MTN   -> isAirtelPrefix
+                    ? "Phone number " + PhoneUtils.maskPhone(phone) + " appears to be an Airtel number. Select AIRTEL as the network."
+                    : null;
+        };
+    }
+
     private String pushStatusMessage(String status) {
         return switch (status) {
-            case "PENDING_PAYMENT" -> "Waiting for Airtel PIN confirmation";
-            case "CONFIRMED" -> "Payment confirmed. Your order is being prepared.";
-            case "CANCELLED" -> "Payment was not completed. Please try again or switch to COD.";
-            default -> "";
+            case "PENDING_PAYMENT" -> "Waiting for payment PIN confirmation";
+            case "CONFIRMED"       -> "Payment confirmed. Your order is being prepared.";
+            case "CANCELLED"       -> "Payment was not completed. Please try again or switch to COD.";
+            default                -> "";
         };
     }
 }

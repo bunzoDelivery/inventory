@@ -32,11 +32,12 @@ public class OrderCleanupScheduler {
     public void cancelUnpaidOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(paymentTimeoutMinutes);
 
-        // Note: Airtel orders (airtel_transaction_id IS NOT NULL) are excluded here.
-        // Those are handled by AirtelFailsafeScheduler which queries Airtel's API
-        // before cancelling.
+        // Orders that already have a gateway_transaction_id (push was sent) are excluded here.
+        // Those are handled by GenericPaymentFailsafeScheduler which queries the provider's API
+        // before cancelling. This cleanup only catches COD orders or orders where /pay was
+        // never called.
         orderRepo.findByStatusAndCreatedAtBefore(OrderStatus.PENDING_PAYMENT.name(), cutoff)
-                .filter(order -> order.getAirtelTransactionId() == null) // COD/push-not-sent-yet only
+                .filter(order -> order.getGatewayTransactionId() == null) // COD/push-not-sent-yet only
                 .take(50)
                 .flatMap(order -> {
                     log.info("Cancelling expired order: {} (created at {})", order.getOrderUuid(),

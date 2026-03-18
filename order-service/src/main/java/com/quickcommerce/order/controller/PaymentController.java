@@ -1,9 +1,10 @@
 package com.quickcommerce.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quickcommerce.order.exception.PaymentGatewayException;
 import com.quickcommerce.order.payment.dto.InitiatePaymentRequest;
 import com.quickcommerce.order.payment.dto.PaymentStatusResponse;
+import com.quickcommerce.order.payment.gateway.pawapay.PawaPayWebhookPayload;
+import com.quickcommerce.order.payment.gateway.pawapay.PawaPayWebhookValidator;
 import com.quickcommerce.order.payment.service.PaymentService;
 import com.quickcommerce.order.payment.webhook.AirtelWebhookPayload;
 import com.quickcommerce.order.payment.webhook.AirtelWebhookValidator;
@@ -26,25 +27,24 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final AirtelWebhookValidator webhookValidator;
+    private final AirtelWebhookValidator airtelWebhookValidator;
+    private final PawaPayWebhookValidator pawaPayWebhookValidator;
     private final ObjectMapper objectMapper;
 
     @Qualifier("payInitiationRateLimiter")
     private final RateLimiter payInitiationRateLimiter;
 
-    // ─── Initiate Airtel STK Push ─────────────────────────────────────────────
+    // ─── Initiate Payment (generic — active gateway is resolved by PaymentService) ──
 
     /**
      * Step 2 of the payment flow. Called immediately after createOrder returns PENDING_PAYMENT.
-     *
-     * Requires X-Customer-Id header. Before the centralized auth gateway is deployed this header
-     * must be set by the caller. Once the gateway is live it will inject this header automatically
-     * from the validated JWT — no change needed here.
+     * The active payment gateway is resolved from config — no frontend changes needed
+     * when switching between PawaPay and Airtel Direct.
      */
     @PostMapping("/api/v1/orders/{orderUuid}/pay")
     public Mono<ResponseEntity<PaymentStatusResponse>> initiatePayment(
             @PathVariable String orderUuid,
-            @RequestHeader(value = "X-Customer-Id", required = true) String customerId,
+            @RequestHeader(value = "X-Customer-Id") String customerId,
             @Valid @RequestBody InitiatePaymentRequest request) {
         log.info("Initiating payment for order={}", orderUuid);
         return paymentService.initiatePayment(orderUuid, customerId, request)
@@ -64,21 +64,54 @@ public class PaymentController {
             @RequestBody String rawBody,
             ServerHttpRequest request) {
 
-        return webhookValidator.validate(request, rawBody)
-                .then(Mono.defer(() -> {
-                    AirtelWebhookPayload payload;
-                    try {
-                        payload = parseWebhookPayload(rawBody);
-                    } catch (Exception e) {
-                        log.error("Failed to parse Airtel webhook body: {}", rawBody, e);
-                        return Mono.just(ResponseEntity.ok(Map.of("status", "ACCEPTED")));
-                    }
-
-                    return paymentService.handleWebhook(payload, rawBody)
-                            .thenReturn(ResponseEntity.ok(Map.of("status", "ACCEPTED")));
-                }))
+        return airtelWebhookValidator.validate(request, rawBody)
+                .then(Mono.fromCallable(() -> objectMapper.readValue(rawBody, AirtelWebhookPayload.class)))
+                .flatMap(payload -> paymentService.processPaymentResult(
+                        payload.getTransactionId(),
+                        payload.isSuccess(),
+                        payload.getStatusCode(),
+                        rawBody,
+                        "AIRTEL_WEBHOOK"))
+                .thenReturn(ResponseEntity.ok(Map.of("status", "ACCEPTED")))
                 .onErrorResume(e -> {
-                    log.error("Airtel webhook processing error", e);
+                    log.error("Airtel webhook processing error — body={}", rawBody, e);
+                    return Mono.just(ResponseEntity.ok(Map.of("status", "ACCEPTED")));
+                });
+    }
+
+    // ─── PawaPay Webhook ──────────────────────────────────────────────────────
+
+    /**
+     * PawaPay POSTs here after the customer enters their PIN (or the request expires).
+     * CRITICAL: Always returns 200 OK — even on validation failure or processing error.
+     * If we return non-200, PawaPay will retry the webhook endlessly.
+     *
+     * PawaPay uses our own {@code orderUuid} as the {@code depositId}, so no extra
+     * lookup is needed to correlate the webhook to an order.
+     */
+    @PostMapping("/api/v1/webhooks/pawapay")
+    public Mono<ResponseEntity<Map<String, String>>> handlePawaPayWebhook(
+            @RequestBody String rawBody,
+            ServerHttpRequest request) {
+
+        return pawaPayWebhookValidator.validate(request, rawBody)
+                .then(Mono.fromCallable(() -> objectMapper.readValue(rawBody, PawaPayWebhookPayload.class)))
+                .flatMap(payload -> {
+                    if (payload.isDuplicate()) {
+                        log.info("PawaPay DUPLICATE_IGNORED webhook for depositId={} — no-op",
+                                payload.getDepositId());
+                        return Mono.empty();
+                    }
+                    return paymentService.processPaymentResult(
+                            payload.getDepositId(),
+                            payload.isSuccess(),
+                            payload.getStatus(),
+                            rawBody,
+                            "PAWAPAY_WEBHOOK");
+                })
+                .thenReturn(ResponseEntity.ok(Map.of("status", "ACCEPTED")))
+                .onErrorResume(e -> {
+                    log.error("PawaPay webhook processing error — body={}", rawBody, e);
                     return Mono.just(ResponseEntity.ok(Map.of("status", "ACCEPTED")));
                 });
     }
@@ -87,25 +120,12 @@ public class PaymentController {
 
     /**
      * Frontend polls this every 3 seconds while waiting for the customer to enter PIN.
-     *
-     * Requires X-Customer-Id header (see comment on initiatePayment above).
      */
     @GetMapping("/api/v1/orders/{orderUuid}/payment-status")
     public Mono<ResponseEntity<PaymentStatusResponse>> getPaymentStatus(
             @PathVariable String orderUuid,
-            @RequestHeader(value = "X-Customer-Id", required = true) String customerId) {
+            @RequestHeader(value = "X-Customer-Id") String customerId) {
         return paymentService.getPaymentStatus(orderUuid, customerId)
                 .map(ResponseEntity::ok);
-    }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    private AirtelWebhookPayload parseWebhookPayload(String rawBody) {
-        try {
-            return objectMapper.readValue(rawBody, AirtelWebhookPayload.class);
-        } catch (Exception e) {
-            log.error("Failed to parse Airtel webhook payload: {}", rawBody, e);
-            throw new PaymentGatewayException("Invalid webhook payload from payment gateway");
-        }
     }
 }

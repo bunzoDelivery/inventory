@@ -1,0 +1,103 @@
+
+
+
+To achieve a highly scalable, error-proof system that allows you to use **PawaPay today** and seamlessly switch to **Airtel Direct tomorrow** (without breaking the app), you need to implement the **Adapter Pattern (or Strategy Pattern)** on your backend.
+
+The **UI/UX Design remains exactly the same.** The customer doesn't care if you use an aggregator or a direct connection. 
+
+However, your **Backend API contracts and Database Schema need slight tweaks** to decouple the word "Airtel" from your core logic.
+
+Here is the ultimate architectural approach to future-proof your v2 design.
+
+---
+
+### 1. The Core Architectural Change: The "Gateway Abstraction"
+Right now, your v2 document has logic heavily tied to Airtel (`AirtelFailsafeScheduler`, `/webhooks/airtel`). If you integrate PawaPay, you'd have to rewrite this.
+
+Instead, your backend should have a generic **`PaymentService`** that talks to a **`PaymentProvider` Interface**.
+
+```text
+                  [ FRONTEND APP ]
+                         | (Generic API Call: Pay with AIRTEL_MONEY)
+                         v
+                [ BACKEND: Payment Service ]
+                         |
+      -----------------------------------------------
+      | (Checks ENV variable: ACTIVE_GATEWAY=PAWAPAY)
+      |
+      v                                             v
+[ PawaPay Adapter ]                          [ Airtel Direct Adapter ]
+      |                                             |
+   (PawaPay API)                               (Airtel API)
+```
+
+By doing this, switching from PawaPay to Airtel next year requires **zero frontend changes** and **zero database migrations**. You just change an environment variable.
+
+---
+
+### 2. Required Changes to your API Design (Decoupling)
+
+Remove vendor-specific names from your frontend-to-backend communication.
+
+**Change 1: The Payment Execution Endpoint**
+*Old:* `POST /api/v1/orders/{uuid}/pay` (Returns `airtelTransactionId`)
+*New:* 
+```json
+// POST /api/v1/orders/{uuid}/pay
+{
+  "mobileMoneyProvider": "AIRTEL", // or "MTN"
+  "paymentPhone": "0971234567"
+}
+
+// Backend Response
+{
+  "status": "PUSH_SENT",
+  "paymentAttemptId": "ATT-98765", // Your internal DB ID
+  "providerReference": "PAWA-12345", // Could be Airtel's ID or PawaPay's depositId
+  "message": "Prompt sent. Please enter your PIN."
+}
+```
+
+**Change 2: The Webhook Routing**
+Since PawaPay and Airtel send webhooks in completely different JSON formats, your backend needs separate "doors" that map to the same internal logic.
+*   `POST /api/v1/webhooks/pawapay` → Maps PawaPay JSON to your standard format.
+*   `POST /api/v1/webhooks/airtel` → Maps Airtel JSON to your standard format.
+
+Both webhooks then call a single internal function: `processPaymentResult(orderId, status)`
+
+---
+
+### 3. Database Schema Updates (For Resilience)
+
+To make it less error-prone and scalable, your `payment_attempts` table is your source of truth. It must record **who** processed the payment.
+
+**Table: `payment_attempts`**
+*   `id` (PK)
+*   `order_id` (FK)
+*   `gateway_used` (Enum: `PAWAPAY`, `AIRTEL_DIRECT`) 
+*   `gateway_reference_id` (The ID returned by PawaPay or Airtel)
+*   `mobile_network` (Enum: `AIRTEL`, `MTN`)
+*   `phone_number`
+*   `status` (`PENDING`, `SUCCESS`, `FAILED`)
+*   `raw_webhook_payload` (JSON - Crucial for debugging disputes)
+
+*Why this is scalable:* If an order is stuck, your `FailsafeScheduler` looks at the `gateway_used` column. If it says `PAWAPAY`, the scheduler knows to call the PawaPay Status API. If it says `AIRTEL_DIRECT`, it calls the Airtel Status API.
+
+---
+
+### 4. The Failsafe Scheduler (The "Anti-Error" Engine)
+
+Your v2 document mentioned an `AirtelFailsafeScheduler`. Make it a **`GenericPaymentFailsafeScheduler`**.
+
+**How it works (Cron Job running every 1 minute):**
+1.  Query DB: `SELECT * FROM payment_attempts WHERE status = 'PENDING' AND created_at < (NOW() - 60 seconds)`.
+2.  Loop through the results.
+3.  For each attempt, check `gateway_used`.
+4.  Route the status check dynamically:
+    *   If `PAWAPAY` → Call `GET /deposits/{gateway_reference_id}` on PawaPay.
+    *   If `AIRTEL_DIRECT` → Call `GET /standard/v1/payments/{gateway_reference_id}` on Airtel.
+5.  If the gateway says `SUCCESS`, update the Order to `CONFIRMED`.
+6.  If the gateway says `FAILED` or `NOT_FOUND`, update the Order to `CANCELLED`.
+
+---
+

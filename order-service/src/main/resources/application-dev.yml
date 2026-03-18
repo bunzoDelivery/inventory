@@ -21,8 +21,7 @@ logging:
     org.springframework.r2dbc: DEBUG
     io.r2dbc.mysql: DEBUG
 
-# Fast failsafe for local dev/testing with mock-airtel
-# Payment will succeed in ~5 seconds after /pay is called
-airtel:
+# Fast failsafe for local dev — payment confirms ~5s after /pay is called
+payment:
   failsafe-interval-ms: 3000    # Run every 3 seconds
-  failsafe-cutoff-seconds: 2    # Check orders idle for >2s
+  failsafe-cutoff-seconds: 2    # Check attempts idle for >2s

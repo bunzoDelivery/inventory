@@ -2,7 +2,10 @@ spring:
   application:
     name: order-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:mock-airtel}
+    active: ${SPRING_PROFILES_ACTIVE:mock-pawapay}
+  codec:
+    # Limit in-memory body size — prevents OOM from oversized webhook/API payloads
+    max-in-memory-size: 256KB
 
   # Database Configuration
   r2dbc:
@@ -29,6 +32,8 @@ server:
   port: ${SERVER_PORT:8082}
   netty:
     connection-timeout: 30s
+  # Limit request body size — prevents OOM from oversized webhook/API payloads
+  max-http-request-header-size: 8KB
 
 # Logging
 logging:
@@ -58,24 +63,51 @@ order:
   payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:15}
   cleanup-interval-ms: ${ORDER_CLEANUP_INTERVAL_MS:60000}
 
-# Airtel Money Config
-# Switch profile to 'airtel' (remove 'mock-airtel') when sandbox credentials are ready
+# ─── Phone Validation Config ──────────────────────────────────────────────────
+# Set ACCEPT_INDIAN_PHONE_NUMBERS=true while testing from India (dev, staging, AWS prod).
+# Flip to false (or remove the env var) once the app goes live in Zambia only.
+phone:
+  accept-indian-numbers: ${ACCEPT_INDIAN_PHONE_NUMBERS:true}
+
+# ─── Payment Gateway Config ───────────────────────────────────────────────────
+# Controls which gateway handles NEW payment initiations.
+# Existing payment_attempts retain their gateway_used value so the failsafe
+# scheduler can still check status via the correct provider after a switch.
+#
+# Values: PAWAPAY | AIRTEL_DIRECT
+#
+# Set both SPRING_PROFILES_ACTIVE and ACTIVE_PAYMENT_GATEWAY together:
+#   mock-airtel  + AIRTEL_DIRECT  → Airtel mock (default)
+#   airtel       + AIRTEL_DIRECT  → Airtel real
+#   mock-pawapay + PAWAPAY        → PawaPay mock
+#   pawapay      + PAWAPAY        → PawaPay real
+payment:
+  active-gateway: ${ACTIVE_PAYMENT_GATEWAY:PAWAPAY}
+  # Failsafe scheduler: polls provider for stuck INITIATED attempts.
+  # Production values below; overridden to fast values in application-dev.yml.
+  failsafe-interval-ms: ${PAYMENT_FAILSAFE_INTERVAL_MS:55000}     # 55s in prod
+  failsafe-cutoff-seconds: ${PAYMENT_FAILSAFE_CUTOFF_SECONDS:60}  # attempts idle >60s
+
+# ─── PawaPay Config ───────────────────────────────────────────────────────────
+# Active when Spring profile includes "pawapay"
+# Dev/test: use "mock-pawapay" profile — no real credentials needed
+pawapay:
+  base-url: ${PAWAPAY_BASE_URL:https://api.sandbox.pawapay.io}
+  api-key: ${PAWAPAY_API_KEY:mock-pawapay-key}
+  # PawaPay webhook URL — must be publicly reachable HTTPS in staging/prod
+  callback-url: ${PAWAPAY_CALLBACK_URL:http://localhost:8082/api/v1/webhooks/pawapay}
+
+# ─── Airtel Money Config ──────────────────────────────────────────────────────
+# Active when Spring profile includes "airtel" (staging/prod)
+# Switch from mock-airtel to airtel once sandbox credentials are available
 airtel:
   base-url: ${AIRTEL_BASE_URL:https://openapiuat.airtel.africa}
   client-id: ${AIRTEL_CLIENT_ID:mock-id}
   client-secret: ${AIRTEL_CLIENT_SECRET:mock-secret}
-  # REQUIRED in all deployed environments — must be a publicly reachable HTTPS URL.
-  # Airtel uses this URL to POST payment result webhooks. Localhost will NOT work in staging/prod.
-  # Set AIRTEL_CALLBACK_URL env var to your public webhook endpoint before going live.
   callback-url: ${AIRTEL_CALLBACK_URL:http://localhost:8082/api/v1/webhooks/airtel}
   country: ${AIRTEL_COUNTRY:ZM}
   currency: ${AIRTEL_CURRENCY:ZMW}
   token-refresh-interval-ms: ${AIRTEL_TOKEN_REFRESH_MS:2700000}   # 45 minutes
-  # TODO: Tune failsafe timing based on production webhook reliability
-  # Current: checks every 3s for orders idle >2s (fast for testing/dev)
-  # Production recommendation: 55s interval, 60s cutoff (webhooks should arrive in 1-3s normally)
-  failsafe-interval-ms: ${AIRTEL_FAILSAFE_INTERVAL_MS:3000}       # 3 seconds (dev: fast confirmation)
-  failsafe-cutoff-seconds: ${AIRTEL_FAILSAFE_CUTOFF_SECONDS:2}    # orders idle for >2s
 
 # Resilience4j
 resilience4j:

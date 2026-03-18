@@ -5,8 +5,8 @@ import lombok.Data;
 
 /**
  * Response for:
- * POST /api/v1/orders/{uuid}/pay — after STK push initiated
- * GET /api/v1/orders/{uuid}/payment-status — frontend polling
+ * POST /api/v1/orders/{uuid}/pay       — after USSD push initiated
+ * GET  /api/v1/orders/{uuid}/payment-status — frontend polling
  */
 @Data
 @Builder
@@ -23,11 +23,15 @@ public class PaymentStatusResponse {
     /** Masked payment phone e.g. "097****567" */
     private String paymentPhone;
 
+    /** Which mobile network was dialled: AIRTEL | MTN */
+    private String mobileNetwork;
+
     /**
-     * Status of the STK push itself:
-     * PUSH_SENT — prompt sent to customer's phone, waiting for PIN
-     * CONFIRMED — payment successful
-     * FAILED — payment rejected or timed out
+     * Status of the USSD push itself:
+     * AWAITING_PUSH — /pay not yet called
+     * PUSH_SENT     — prompt sent to customer's phone, waiting for PIN
+     * CONFIRMED     — payment successful
+     * FAILED        — payment rejected or timed out
      */
     private String pushStatus;
 

@@ -131,6 +131,22 @@
     </dependencyManagement>
     <build>
         <plugins>
+            <!--
+              Docker/Testcontainers integration tests require a running Docker daemon.
+              Excluded from the default 'mvn test' run; run them explicitly or in CI
+              where Docker is available.
+              The subclass mock maker (mockito-extensions/org.mockito.plugins.MockMaker)
+              avoids the need for any JVM self-attach flags on JDK 17+.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
