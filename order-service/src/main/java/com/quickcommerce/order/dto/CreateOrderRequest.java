@@ -1,5 +1,6 @@
 package com.quickcommerce.order.dto;
 
+import com.quickcommerce.order.util.ValidPhone;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -73,8 +74,7 @@ public class CreateOrderRequest {
         private String address;
 
         @NotNull(message = "Contact phone number is required")
-        @Pattern(regexp = "^((\\+91|0)?[6-9]\\d{9}|(\\+260|0)?[79]\\d{8})$", 
-                 message = "Must be a valid Indian or Zambian mobile number (e.g. 9876543210, 0977123456, +260977123456)")
+        @ValidPhone
         private String phone;
 
         @Size(max = 255, message = "Delivery notes too long")

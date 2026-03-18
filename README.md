@@ -19,7 +19,9 @@ This system provides comprehensive product catalog management, real-time invento
 
 ### Order Service (Port 8082)
 - **Order Management**: Create, preview, cancel, and track orders
-- **Payment Integration**: Airtel Money mobile payments with STK push
+- **Payment Integration**: Mobile money via PawaPay aggregator (Airtel ZMB, MTN ZMB) or direct Airtel Money — switchable via config
+- **Gateway Abstraction**: Strategy pattern — swap payment providers without touching business logic
+- **Failsafe Scheduler**: Polls provider for missed webhooks so no payment is ever left stuck
 - **Stock Reservation**: Integrates with product-service for inventory checks and reservations
 - **Order Lifecycle**: PENDING_PAYMENT → CONFIRMED → PACKING → OUT_FOR_DELIVERY → DELIVERED
 - **Idempotency**: Optional Idempotency-Key header for safe retries
@@ -53,9 +55,9 @@ This system provides comprehensive product catalog management, real-time invento
 docker-compose up -d
 ```
 
-This starts:
-- MySQL database on port 3306
-- Meilisearch on port 7700 (optional, for search-service)
+This starts all three services (product-service, order-service, search-service) connected to an external AWS RDS MySQL.
+
+The order-service defaults to `prod,mock-pawapay` in docker-compose. To switch to real PawaPay, change `SPRING_PROFILES_ACTIVE` to `prod,pawapay` and add `PAWAPAY_API_KEY` + `PAWAPAY_CALLBACK_URL`.
 
 2. Run product-service:
 ```bash
@@ -76,12 +78,12 @@ Search-service will be available on `http://localhost:8083`
 4. Run order-service (requires product-service):
 ```bash
 cd order-service
-SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=mock-pawapay,dev mvn spring-boot:run
 ```
 
 Order-service will be available on `http://localhost:8082`
 
-**Note:** In `dev` profile, the mock Airtel client auto-confirms payments after 10 seconds for faster local testing.
+**Note:** In `mock-pawapay,dev` profile the mock PawaPay gateway auto-confirms payments within ~5 seconds (failsafe runs every 3s). No real credentials needed.
 
 5. Check health:
 ```bash
@@ -158,6 +160,7 @@ curl http://localhost:8082/actuator/health
 | **Order** | POST | `/api/v1/orders/{orderUuid}/status` | Update order status |
 | **Order** | POST | `/api/v1/orders/{orderUuid}/pay-mock` | Mock payment (dev) |
 | **Order** | POST | `/api/v1/webhooks/airtel` | Airtel webhook (internal) |
+| **Order** | POST | `/api/v1/webhooks/pawapay` | PawaPay webhook (internal) |
 
 ---
 
@@ -731,7 +734,7 @@ Idempotency-Key: optional-unique-key-for-retries
 ```
 - `paymentMethod`: `COD` | `AIRTEL_MONEY` | `MTN_MONEY`
 - `items`: max 50 distinct SKUs, max 100 units per item
-- `delivery.phone`: Indian (e.g. 9876543210) or Zambian (e.g. 0977123456, +260977123456)
+- `delivery.phone`: Zambian (e.g. 0977123456, +260977123456, 260977123456) or Indian for testing (e.g. 9876543210)
 
 **Response:** `201 Created`
 - **COD orders**: Status `CONFIRMED` (immediately ready for fulfillment)
@@ -767,10 +770,12 @@ Content-Type: application/json
 X-Customer-Id: cust-123
 
 {
-  "paymentPhone": "0971234567"
+  "paymentPhone": "260977123456",
+  "mobileNetwork": "AIRTEL"
 }
 ```
-`paymentPhone`: Indian or Zambian mobile number format.
+- `paymentPhone`: Zambian (e.g. 260977123456, 0977123456) or Indian for testing
+- `mobileNetwork`: `AIRTEL` | `MTN` — required so PawaPay can route to the correct provider
 
 **Response:** `200 OK`
 ```json
@@ -778,9 +783,10 @@ X-Customer-Id: cust-123
   "orderUuid": "550e8400-e29b-41d4-a716-446655440000",
   "orderStatus": "PENDING_PAYMENT",
   "paymentStatus": "PENDING",
-  "paymentPhone": "097****567",
+  "paymentPhone": "260****456",
+  "mobileNetwork": "AIRTEL",
   "pushStatus": "PUSH_SENT",
-  "message": "Airtel Money prompt sent to 097****567. Please enter your PIN."
+  "message": "Payment prompt sent to 260****456. Please enter your PIN."
 }
 ```
 
@@ -833,14 +839,24 @@ Header `Actor-Id` (optional, default `SYSTEM`). Valid statuses: `PACKING`, `OUT_
 ```bash
 POST /api/v1/orders/{orderUuid}/pay-mock
 ```
-Auto-confirms payment (mock-airtel profile).
+Auto-confirms payment instantly. Only available with `mock-airtel` or `mock-pawapay` profiles.
 
 #### Webhooks (Internal)
 
-**Airtel Webhook** - Airtel POSTs here after customer enters PIN. Always returns `200 OK`.
+PawaPay and Airtel POST here when payment reaches a final state. Always returns `200 OK`.
+
 ```bash
-POST /api/v1/webhooks/airtel
+POST /api/v1/webhooks/pawapay   # PawaPay sandbox/production callback
+POST /api/v1/webhooks/airtel    # Airtel Money callback
 ```
+
+The callback URL must be publicly reachable HTTPS. Use [ngrok](https://ngrok.com) for local testing:
+```bash
+ngrok http 8082
+# then set PAWAPAY_CALLBACK_URL=https://<your-ngrok-url>/api/v1/webhooks/pawapay
+```
+
+Even without webhooks the **failsafe scheduler** polls PawaPay every 55 seconds (3s in dev) and recovers any missed callbacks automatically.
 
 #### Health & Metrics
 
@@ -892,7 +908,11 @@ GET /actuator/health
 | `ORDER_DELIVERY_FEE` | Delivery fee (ZMW) | 15.00 |
 | `ORDER_PAYMENT_TIMEOUT_MINUTES` | Payment timeout | 15 |
 | `ORDER_CLEANUP_INTERVAL_MS` | Cleanup interval for expired orders | 60000 |
-| `SPRING_PROFILES_ACTIVE` | Spring profiles | mock-airtel |
+| `SPRING_PROFILES_ACTIVE` | Spring profiles (see table below) | `mock-pawapay` |
+| `ACTIVE_PAYMENT_GATEWAY` | Gateway router target: `PAWAPAY` or `AIRTEL_DIRECT` | `PAWAPAY` |
+| `PAWAPAY_BASE_URL` | PawaPay API base URL | `https://api.sandbox.pawapay.io` |
+| `PAWAPAY_API_KEY` | PawaPay Bearer token (for `pawapay` profile) | - |
+| `PAWAPAY_CALLBACK_URL` | PawaPay webhook URL (HTTPS, publicly accessible) | - |
 | `AIRTEL_CLIENT_ID` | Airtel API client ID (for `airtel` profile) | - |
 | `AIRTEL_CLIENT_SECRET` | Airtel API client secret (for `airtel` profile) | - |
 | `AIRTEL_CALLBACK_URL` | Airtel webhook URL (HTTPS, publicly accessible) | - |
@@ -900,29 +920,36 @@ GET /actuator/health
 ### Application Profiles
 
 **Product Service & Search Service:**
-- `dev` - Development with localhost database
+- `dev` - Debug logging, localhost database defaults
 - `prod` - Production with environment-based configuration
-- `test` - Test profile
 
-**Order Service:**
-- `dev` - Development with localhost database (includes mock-airtel by default)
-- `mock-airtel` - Mock Airtel Money client for local/staging (no real API calls, auto-confirms after 10s)
-- `airtel` - Real Airtel Money API integration (requires `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_CALLBACK_URL`)
+**Order Service — set `SPRING_PROFILES_ACTIVE` and `ACTIVE_PAYMENT_GATEWAY` together:**
 
-**Default:** `SPRING_PROFILES_ACTIVE=mock-airtel`
+| `SPRING_PROFILES_ACTIVE` | `ACTIVE_PAYMENT_GATEWAY` | Description |
+|--------------------------|--------------------------|-------------|
+| `mock-pawapay` *(default)* | `PAWAPAY` | PawaPay mock — no credentials, auto-confirms in ~5s |
+| `mock-pawapay,dev` | `PAWAPAY` | Same + debug logging + fast failsafe |
+| `pawapay` | `PAWAPAY` | Real PawaPay (sandbox or prod) — requires `PAWAPAY_API_KEY`, `PAWAPAY_CALLBACK_URL` |
+| `pawapay,dev` | `PAWAPAY` | Real PawaPay + debug logging |
+| `mock-airtel` | `AIRTEL_DIRECT` | Airtel mock — no credentials, auto-confirms in ~10s |
+| `airtel` | `AIRTEL_DIRECT` | Real Airtel Money — requires `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_CALLBACK_URL` |
 
-**Production with mock payment:**
+Add `dev` to any profile combination for verbose logging and a faster failsafe (3s instead of 55s).
+
+**Staging/production with real PawaPay:**
 ```bash
-SPRING_PROFILES_ACTIVE=mock-airtel \
+SPRING_PROFILES_ACTIVE=pawapay \
+ACTIVE_PAYMENT_GATEWAY=PAWAPAY \
 DB_HOST=prod-db-host \
-DB_USERNAME=admin \
-DB_PASSWORD=secure-password \
+PAWAPAY_API_KEY=your-api-token \
+PAWAPAY_CALLBACK_URL=https://yourdomain.com/api/v1/webhooks/pawapay \
 java -jar order-service.jar
 ```
 
-**Production with real Airtel API:**
+**Staging with real Airtel:**
 ```bash
 SPRING_PROFILES_ACTIVE=airtel \
+ACTIVE_PAYMENT_GATEWAY=AIRTEL_DIRECT \
 DB_HOST=prod-db-host \
 AIRTEL_CLIENT_ID=your-client-id \
 AIRTEL_CLIENT_SECRET=your-client-secret \
@@ -1023,7 +1050,7 @@ java -jar order-service.jar
 - `customer_orders` - Order header with status, payment method, delivery details
 - `order_items` - Line items per order
 - `order_events` - Order lifecycle event log
-- `payment_attempts` - Airtel Money payment audit trail
+- `payment_attempts` - Payment audit trail (gateway-agnostic: stores `gateway_used`, `gateway_ref`, `mobile_network`)
 
 ## Development
 
@@ -1039,9 +1066,13 @@ SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 cd search-service
 SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 
-# Order Service (requires product-service)
+# Order Service — mock PawaPay, fast failsafe, debug logging (requires product-service)
 cd order-service
-SPRING_PROFILES_ACTIVE=dev,mock-airtel mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=mock-pawapay,dev ACTIVE_PAYMENT_GATEWAY=PAWAPAY mvn spring-boot:run
+
+# Order Service — real PawaPay sandbox (load from .env)
+cd order-service
+export $(cat .env | xargs) && mvn spring-boot:run
 ```
 
 **With Custom Database:**

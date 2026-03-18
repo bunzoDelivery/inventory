@@ -20,6 +20,7 @@ import reactor.core.publisher.Mono;
  */
 @Slf4j
 @Component
+@org.springframework.context.annotation.Profile("!airtel")
 public class NoOpAirtelWebhookValidator implements AirtelWebhookValidator {
 
     @Override

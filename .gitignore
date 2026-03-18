@@ -57,3 +57,8 @@ TestDataGenerator/output/*
 **/target/
 *.class
 .cursor/*
+
+# Local env files with secrets
+.env
+*.env
+order-service/.env

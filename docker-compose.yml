@@ -40,9 +40,15 @@ services:
                 MODULE_NAME: order-service
         container_name: order-service
         environment:
-            # TODO: Change to "prod,airtel" once Airtel clientId/secret are configured
-            # and AIRTEL_CLIENT_ID, AIRTEL_CLIENT_SECRET, AIRTEL_CALLBACK_URL env vars are set
-            SPRING_PROFILES_ACTIVE: prod,mock-airtel
+            # Gateway options:
+            #   mock-pawapay + PAWAPAY  → PawaPay mock (no credentials needed)
+            #   pawapay + PAWAPAY       → PawaPay real (set PAWAPAY_API_KEY, PAWAPAY_CALLBACK_URL)
+            #   mock-airtel + AIRTEL_DIRECT → Airtel mock
+            #   airtel + AIRTEL_DIRECT  → Airtel real (set AIRTEL_CLIENT_ID, AIRTEL_CLIENT_SECRET)
+            SPRING_PROFILES_ACTIVE: prod,mock-pawapay
+            ACTIVE_PAYMENT_GATEWAY: PAWAPAY
+            # Allow Indian phone numbers while testing from India — flip to false for Zambia-only launch
+            ACCEPT_INDIAN_PHONE_NUMBERS: "true"
             DB_HOST: ${DB_HOST}
             DB_PORT: ${DB_PORT:-3306}
             DB_NAME: ${DB_NAME:-inventory}
