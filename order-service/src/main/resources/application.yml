@@ -85,8 +85,9 @@ payment:
   active-gateway: ${ACTIVE_PAYMENT_GATEWAY:PAWAPAY}
   # Failsafe scheduler: polls provider for stuck INITIATED attempts.
   # Production values below; overridden to fast values in application-dev.yml.
-  failsafe-interval-ms: ${PAYMENT_FAILSAFE_INTERVAL_MS:55000}     # 55s in prod
-  failsafe-cutoff-seconds: ${PAYMENT_FAILSAFE_CUTOFF_SECONDS:60}  # attempts idle >60s
+  //TODO: Change to production values later
+  failsafe-interval-ms: ${PAYMENT_FAILSAFE_INTERVAL_MS:300}     # 55s in prod
+  failsafe-cutoff-seconds: ${PAYMENT_FAILSAFE_CUTOFF_SECONDS:2}  # attempts idle >60s
 
 # ─── PawaPay Config ───────────────────────────────────────────────────────────
 # Active when Spring profile includes "pawapay"
