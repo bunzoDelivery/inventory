@@ -70,6 +70,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway for database migrations (uses JDBC driver above) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <!-- Meilisearch Java Client -->
         <dependency>
             <groupId>com.meilisearch.sdk</groupId>

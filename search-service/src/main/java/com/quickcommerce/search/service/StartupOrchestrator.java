@@ -32,10 +32,8 @@ public class StartupOrchestrator {
             // Step 1: Ensure index exists
             ensureIndexExists();
 
-            // Step 1.5: Auto-bootstrap default settings if DB is empty
-            ensureDefaultSettings();
-
-            // Step 2: Sync settings and synonyms from DB to Meilisearch
+            // Step 2: Sync settings and synonyms from DB → Meilisearch
+            // (DB is the single source of truth; seeded by Flyway migrations)
             syncConfiguration();
 
             // Step 3: Sync products (if enabled)
@@ -67,23 +65,6 @@ public class StartupOrchestrator {
             log.info("Index does not exist, creating with primaryKey='id'...");
             meilisearchProvider.createIndex().block();
             log.info("Index created successfully");
-        }
-    }
-
-    private void ensureDefaultSettings() {
-        log.info("Step 1.5: Checking if default settings exist...");
-        try {
-            Integer count = configurationService.bootstrapDefaultSettings("system")
-                .block();
-            
-            if (count != null && count > 0) {
-                log.info("Auto-bootstrapped {} default settings", count);
-            } else {
-                log.info("Settings already exist, skipping bootstrap");
-            }
-        } catch (Exception e) {
-            log.error("Failed to bootstrap default settings", e);
-            throw new RuntimeException("Cannot start without settings", e);
         }
     }
 

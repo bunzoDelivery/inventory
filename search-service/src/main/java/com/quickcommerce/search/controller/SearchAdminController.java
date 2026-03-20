@@ -139,24 +139,46 @@ public class SearchAdminController {
     }
 
     /**
-     * Bootstrap default settings (only if table is empty)
+     * Add a single value to a JSON-array setting (idempotent).
+     * Auto-publishes to Meilisearch.
      */
-    @PostMapping("/settings/bootstrap")
-    public Mono<ResponseEntity<Map<String, Object>>> bootstrapSettings(
+    @PatchMapping("/settings/{key}/add")
+    public Mono<ResponseEntity<com.quickcommerce.search.entity.SearchSetting>> addToSetting(
+            @PathVariable String key,
+            @RequestBody ValueRequest request,
             Authentication authentication) {
         String username = authentication.getName();
-        log.info("Bootstrap settings requested by: {}", username);
-        
-        return configurationService.bootstrapDefaultSettings(username)
-            .map(count -> ResponseEntity.ok(Map.<String, Object>of(
-                "status", "success",
-                "settingsCreated", count,
-                "message", count > 0 ? "Default settings created" : "Settings already exist")))
+        log.info("Adding value '{}' to setting '{}', user={}", request.getValue(), key, username);
+
+        return configurationService.addToArraySetting(key, request.getValue(), username)
+            .map(ResponseEntity::ok)
+            .onErrorResume(IllegalArgumentException.class, e ->
+                Mono.just(ResponseEntity.badRequest().build()))
             .onErrorResume(e -> {
-                log.error("Bootstrap failed", e);
-                return Mono.just(ResponseEntity.status(500).body(Map.of(
-                    "status", "error",
-                    "message", e.getMessage())));
+                log.error("Failed to add to setting", e);
+                return Mono.just(ResponseEntity.status(500).build());
+            });
+    }
+
+    /**
+     * Remove a single value from a JSON-array setting (idempotent).
+     * Auto-publishes to Meilisearch.
+     */
+    @PatchMapping("/settings/{key}/remove")
+    public Mono<ResponseEntity<com.quickcommerce.search.entity.SearchSetting>> removeFromSetting(
+            @PathVariable String key,
+            @RequestBody ValueRequest request,
+            Authentication authentication) {
+        String username = authentication.getName();
+        log.info("Removing value '{}' from setting '{}', user={}", request.getValue(), key, username);
+
+        return configurationService.removeFromArraySetting(key, request.getValue(), username)
+            .map(ResponseEntity::ok)
+            .onErrorResume(IllegalArgumentException.class, e ->
+                Mono.just(ResponseEntity.badRequest().build()))
+            .onErrorResume(e -> {
+                log.error("Failed to remove from setting", e);
+                return Mono.just(ResponseEntity.status(500).build());
             });
     }
 
@@ -189,5 +211,10 @@ public class SearchAdminController {
         private String key;
         private String valueJson;  // JSON array as string
         private String description;
+    }
+
+    @Data
+    public static class ValueRequest {
+        private String value;
     }
 }

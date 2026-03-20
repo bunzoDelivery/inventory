@@ -64,7 +64,8 @@ public class SearchConfigurationService {
                     return Mono.error(new IllegalArgumentException("Failed to serialize synonyms to JSON", e));
                 }
             })
-            .as(transactionalOperator::transactional);
+            .as(transactionalOperator::transactional)
+            .flatMap(saved -> publishConfiguration().thenReturn(saved));
     }
 
     /**
@@ -103,7 +104,9 @@ public class SearchConfigurationService {
     public Mono<Void> deleteSynonym(String term) {
         return synonymRepository.findByTerm(term)
             .flatMap(synonymRepository::delete)
-            .as(transactionalOperator::transactional);
+            .as(transactionalOperator::transactional)
+            .then(publishConfiguration())
+            .then();
     }
 
     /**
@@ -132,44 +135,63 @@ public class SearchConfigurationService {
                 entity.setUpdatedBy(updatedBy);
                 return settingRepository.save(entity);
             })
-            .as(transactionalOperator::transactional);
+            .as(transactionalOperator::transactional)
+            .flatMap(saved -> publishConfiguration().thenReturn(saved));
     }
 
     /**
-     * Bootstrap default settings if table is empty
-     * @param updatedBy Username
-     * @return Mono<Integer> count of settings created
+     * Add a single value to a JSON-array setting (idempotent — skips if already present).
+     * Auto-publishes to Meilisearch after the DB update.
      */
-    public Mono<Integer> bootstrapDefaultSettings(String updatedBy) {
-        return settingRepository.count()
-            .flatMap(count -> {
-                if (count > 0) {
-                    log.info("Settings already exist ({}), skipping bootstrap", count);
-                    return Mono.just(0);
+    public Mono<SearchSetting> addToArraySetting(String key, String value, String updatedBy) {
+        return settingRepository.findByKey(key)
+            .switchIfEmpty(Mono.error(new IllegalArgumentException("Setting not found: " + key)))
+            .flatMap(entity -> {
+                try {
+                    List<String> current = new java.util.ArrayList<>(
+                        objectMapper.readValue(entity.getValueJson(), new TypeReference<List<String>>() {}));
+                    if (current.contains(value)) {
+                        log.info("Value '{}' already present in '{}', skipping", value, key);
+                        return Mono.just(entity);
+                    }
+                    current.add(value);
+                    entity.setValueJson(objectMapper.writeValueAsString(current));
+                    entity.setUpdatedAt(LocalDateTime.now());
+                    entity.setUpdatedBy(updatedBy);
+                    return settingRepository.save(entity);
+                } catch (JsonProcessingException e) {
+                    return Mono.error(new IllegalArgumentException("Failed to parse setting value as JSON array", e));
                 }
-                
-                log.info("Bootstrapping default search settings");
-                
-                Map<String, String[]> defaults = Map.of(
-                    "ranking_rules", new String[]{"words", "typo", "proximity", "attribute", "sort", "exactness"},
-                    "searchable_attributes", new String[]{"name", "brand", "keywords", "categoryName", "description", "barcode"},
-                    "filterable_attributes", new String[]{"storeIds", "isActive", "brand", "categoryId", "isBestseller"},
-                    "sortable_attributes", new String[]{"price", "searchPriority"}
-                );
-                
-                return Flux.fromIterable(defaults.entrySet())
-                    .flatMap(entry -> {
-                        try {
-                            String json = objectMapper.writeValueAsString(entry.getValue());
-                            return saveSetting(entry.getKey(), json, "Default " + entry.getKey(), updatedBy);
-                        } catch (JsonProcessingException e) {
-                            log.error("Failed to serialize setting {}", entry.getKey(), e);
-                            return Mono.empty();
-                        }
-                    })
-                    .count()
-                    .map(Long::intValue);
-            });
+            })
+            .as(transactionalOperator::transactional)
+            .flatMap(saved -> publishConfiguration().thenReturn(saved));
+    }
+
+    /**
+     * Remove a single value from a JSON-array setting (idempotent — skips if not present).
+     * Auto-publishes to Meilisearch after the DB update.
+     */
+    public Mono<SearchSetting> removeFromArraySetting(String key, String value, String updatedBy) {
+        return settingRepository.findByKey(key)
+            .switchIfEmpty(Mono.error(new IllegalArgumentException("Setting not found: " + key)))
+            .flatMap(entity -> {
+                try {
+                    List<String> current = new java.util.ArrayList<>(
+                        objectMapper.readValue(entity.getValueJson(), new TypeReference<List<String>>() {}));
+                    if (!current.remove(value)) {
+                        log.info("Value '{}' not present in '{}', skipping", value, key);
+                        return Mono.just(entity);
+                    }
+                    entity.setValueJson(objectMapper.writeValueAsString(current));
+                    entity.setUpdatedAt(LocalDateTime.now());
+                    entity.setUpdatedBy(updatedBy);
+                    return settingRepository.save(entity);
+                } catch (JsonProcessingException e) {
+                    return Mono.error(new IllegalArgumentException("Failed to parse setting value as JSON array", e));
+                }
+            })
+            .as(transactionalOperator::transactional)
+            .flatMap(saved -> publishConfiguration().thenReturn(saved));
     }
 
     /**

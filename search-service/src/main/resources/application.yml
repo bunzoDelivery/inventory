@@ -10,6 +10,12 @@ spring:
       max-size: 30
       max-idle-time: 30m
       max-acquire-time: 3s
+  flyway:
+    enabled: true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:inventory}
+    user: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    locations: classpath:db/migration
 server:
   port: 8083
 

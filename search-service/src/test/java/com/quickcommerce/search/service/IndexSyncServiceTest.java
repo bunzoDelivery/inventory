@@ -49,6 +49,7 @@ class IndexSyncServiceTest {
         SearchProperties.Sync sync = new SearchProperties.Sync();
         sync.setBatchSize(50);
         when(searchProperties.getSync()).thenReturn(sync);
+        when(meilisearchProvider.deleteAllDocuments()).thenReturn(Mono.empty());
     }
 
     @Test
