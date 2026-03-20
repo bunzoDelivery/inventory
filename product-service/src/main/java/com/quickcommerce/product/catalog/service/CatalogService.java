@@ -301,11 +301,19 @@ public class CatalogService {
     }
 
     /**
-     * Get all products (admin/sync use)
+     * Get all products enriched with category names (used by search-service sync)
      */
     public Flux<ProductResponse> getAllProducts() {
-        return productRepository.findAll()
-                .map(ProductResponse::fromDomain);
+        return categoryRepository.findAll()
+                .collectMap(Category::getId, Category::getName)
+                .flatMapMany(categoryMap ->
+                    productRepository.findAll()
+                        .map(product -> {
+                            ProductResponse resp = ProductResponse.fromDomain(product);
+                            resp.setCategoryName(categoryMap.get(product.getCategoryId()));
+                            return resp;
+                        })
+                );
     }
 
     /**

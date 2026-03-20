@@ -34,6 +34,11 @@ public class CatalogProductDto {
     private String nutritionalInfo;
     private Integer weightGrams;
     private String barcode;
+    private String categoryName;
+    private String searchKeywords;
+    private Integer searchPriority;
+    private Boolean isBestseller;
+    private Integer orderCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

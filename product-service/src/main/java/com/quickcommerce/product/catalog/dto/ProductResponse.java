@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@lombok.Builder
 public class ProductResponse {
 
     private Long id;
@@ -19,6 +20,7 @@ public class ProductResponse {
     private String description;
     private String shortDescription;
     private Long categoryId;
+    private String categoryName;
     private String brand;
     private BigDecimal basePrice;
     private String unitOfMeasure;
@@ -31,31 +33,39 @@ public class ProductResponse {
     private String nutritionalInfo;
     private Integer weightGrams;
     private String barcode;
+    private String searchKeywords;
+    private Integer searchPriority;
+    private Boolean isBestseller;
+    private Integer orderCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     public static ProductResponse fromDomain(Product product) {
-        return new ProductResponse(
-                product.getId(),
-                product.getSku(),
-                product.getName(),
-                product.getDescription(),
-                product.getShortDescription(),
-                product.getCategoryId(),
-                product.getBrand(),
-                product.getBasePrice(),
-                product.getUnitOfMeasure(),
-                product.getPackageSize(),
-                product.getImages(),
-                product.getTags(),
-                product.getIsActive(),
-                product.getIsAvailable(),
-                product.getSlug(),
-                product.getNutritionalInfo(),
-                product.getWeightGrams(),
-                product.getBarcode(),
-                product.getCreatedAt(),
-                product.getUpdatedAt()
-        );
+        return ProductResponse.builder()
+                .id(product.getId())
+                .sku(product.getSku())
+                .name(product.getName())
+                .description(product.getDescription())
+                .shortDescription(product.getShortDescription())
+                .categoryId(product.getCategoryId())
+                .brand(product.getBrand())
+                .basePrice(product.getBasePrice())
+                .unitOfMeasure(product.getUnitOfMeasure())
+                .packageSize(product.getPackageSize())
+                .images(product.getImages())
+                .tags(product.getTags())
+                .isActive(product.getIsActive())
+                .isAvailable(product.getIsAvailable())
+                .slug(product.getSlug())
+                .nutritionalInfo(product.getNutritionalInfo())
+                .weightGrams(product.getWeightGrams())
+                .barcode(product.getBarcode())
+                .searchKeywords(product.getSearchKeywords())
+                .searchPriority(product.getSearchPriority())
+                .isBestseller(product.getIsBestseller())
+                .orderCount(product.getOrderCount())
+                .createdAt(product.getCreatedAt())
+                .updatedAt(product.getUpdatedAt())
+                .build();
     }
 }

@@ -3,6 +3,11 @@ package com.quickcommerce.search.mapper;
 import com.quickcommerce.search.dto.CatalogProductDto;
 import com.quickcommerce.search.model.ProductDocument;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
  * Maps CatalogProductDto (catalog API contract) to ProductDocument (search index).
  */
@@ -11,10 +16,6 @@ public final class ProductDocumentMapper {
     private ProductDocumentMapper() {
     }
 
-    /**
-     * Convert CatalogProductDto to ProductDocument for indexing.
-     * images: direct copy (full JSON string), no parsing.
-     */
     public static ProductDocument toProductDocument(CatalogProductDto dto) {
         if (dto == null) {
             return null;
@@ -26,7 +27,8 @@ public final class ProductDocumentMapper {
                 .brand(dto.getBrand())
                 .description(dto.getDescription())
                 .categoryId(dto.getCategoryId())
-                .categoryName(null) // MVP: no category fetch in catalog response
+                .categoryName(dto.getCategoryName())
+                .keywords(parseKeywords(dto.getSearchKeywords()))
                 .barcode(dto.getBarcode())
                 .isActive(dto.getIsActive())
                 .price(dto.getBasePrice())
@@ -34,6 +36,19 @@ public final class ProductDocumentMapper {
                 .unitText(dto.getPackageSize())
                 .slug(dto.getSlug())
                 .images(dto.getImages())
+                .searchPriority(dto.getSearchPriority() != null ? dto.getSearchPriority() : 0)
+                .isBestseller(dto.getIsBestseller() != null ? dto.getIsBestseller() : false)
+                .orderCount(dto.getOrderCount() != null ? dto.getOrderCount() : 0)
                 .build();
+    }
+
+    private static List<String> parseKeywords(String searchKeywords) {
+        if (searchKeywords == null || searchKeywords.isBlank()) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(searchKeywords.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 }

@@ -152,7 +152,7 @@ public class SearchConfigurationService {
                 
                 Map<String, String[]> defaults = Map.of(
                     "ranking_rules", new String[]{"words", "typo", "proximity", "attribute", "sort", "exactness"},
-                    "searchable_attributes", new String[]{"name", "brand", "keywords", "barcode"},
+                    "searchable_attributes", new String[]{"name", "brand", "keywords", "categoryName", "description", "barcode"},
                     "filterable_attributes", new String[]{"storeIds", "isActive", "brand", "categoryId", "isBestseller"},
                     "sortable_attributes", new String[]{"price", "searchPriority"}
                 );

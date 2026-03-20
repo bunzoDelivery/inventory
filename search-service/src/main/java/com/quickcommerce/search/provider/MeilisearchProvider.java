@@ -59,7 +59,8 @@ public class MeilisearchProvider {
                     .filter(new String[] { buildFilter(storeId) })
                     .attributesToRetrieve(new String[] {
                         "id", "sku", "name", "brand", "categoryId", "categoryName", "unitText", 
-                        "price", "unitOfMeasure", "images", "slug", "isActive"
+                        "price", "unitOfMeasure", "images", "slug", "isActive",
+                        "searchPriority", "isBestseller", "orderCount"
                     })
                     .build();
 
@@ -228,6 +229,20 @@ public class MeilisearchProvider {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to convert to JSON", e);
         }
+    }
+
+    /**
+     * Delete all documents from the index (used before full re-sync).
+     */
+    public Mono<Void> deleteAllDocuments() {
+        return Mono.fromCallable(() -> {
+            Index index = getProductsIndex();
+            index.deleteAllDocuments();
+            log.info("Deleted all documents from index '{}'", properties.getIndexName());
+            return null;
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .then();
     }
 
     /**

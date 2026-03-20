@@ -181,6 +181,10 @@ public class ProductSyncService {
         product.setNutritionalInfo(item.getNutritionalInfo());
         product.setWeightGrams(item.getWeightGrams());
         product.setBarcode(item.getBarcode());
+        product.setSearchKeywords(item.getSearchKeywords());
+        product.setSearchPriority(item.getSearchPriority() != null ? item.getSearchPriority() : 0);
+        product.setIsBestseller(item.getIsBestseller() != null ? item.getIsBestseller() : false);
+        product.setOrderCount(item.getOrderCount() != null ? item.getOrderCount() : 0);
         return product;
     }
     
@@ -238,6 +242,10 @@ public class ProductSyncService {
         product.setNutritionalInfo(item.getNutritionalInfo());
         product.setWeightGrams(item.getWeightGrams());
         product.setBarcode(item.getBarcode());
+        if (item.getSearchKeywords() != null) product.setSearchKeywords(item.getSearchKeywords());
+        if (item.getSearchPriority() != null) product.setSearchPriority(item.getSearchPriority());
+        if (item.getIsBestseller() != null) product.setIsBestseller(item.getIsBestseller());
+        if (item.getOrderCount() != null) product.setOrderCount(item.getOrderCount());
     }
     
     /**

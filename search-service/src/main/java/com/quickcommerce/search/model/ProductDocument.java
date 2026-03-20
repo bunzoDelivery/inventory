@@ -120,9 +120,6 @@ public class ProductDocument {
     /**
      * Search priority (0-100, higher = better)
      */
-    /**
-     * Search priority (0-100, higher = better)
-     */
     @JsonProperty("searchPriority")
     private Integer searchPriority;
 

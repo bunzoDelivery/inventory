@@ -61,6 +61,16 @@ public class ProductSyncItem {
     
     private String barcode;
     
+    // ============ Search Metadata ============
+    
+    private String searchKeywords;
+    
+    private Integer searchPriority;
+    
+    private Boolean isBestseller;
+    
+    private Integer orderCount;
+    
     // ============ Inventory Data ============
     // Note: storeId is at request level, not per item
     
