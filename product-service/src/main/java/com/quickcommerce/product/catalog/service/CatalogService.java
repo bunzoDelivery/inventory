@@ -16,6 +16,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Service for managing catalog operations (categories and products)
@@ -339,5 +340,30 @@ public class CatalogService {
     public Flux<ProductResponse> getProductsByPriceRange(Double minPrice, Double maxPrice) {
         return productRepository.findByPriceRange(minPrice, maxPrice)
                 .map(ProductResponse::fromDomain);
+    }
+
+    /**
+     * Increments {@code order_count} by 1 for each distinct SKU — "how many delivered orders
+     * included this product" (not units sold). Idempotent at order level: only called on transition to DELIVERED.
+     */
+    @Transactional
+    public Mono<Void> incrementOrderCountsForDeliveredOrder(List<String> skus) {
+        if (skus == null || skus.isEmpty()) {
+            return Mono.empty();
+        }
+        List<String> distinct = skus.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (distinct.isEmpty()) {
+            return Mono.empty();
+        }
+        log.info("Incrementing order_count for {} distinct SKU(s) after delivery", distinct.size());
+        return Flux.fromIterable(distinct)
+                .concatMap(sku -> productRepository.incrementOrderCountBySku(sku)
+                        .doOnError(e -> log.warn("Failed order_count increment for sku={}: {}", sku, e.getMessage()))
+                        .onErrorResume(e -> Mono.just(0)))
+                .then();
     }
 }

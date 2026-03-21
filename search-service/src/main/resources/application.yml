@@ -40,6 +40,12 @@ search:
   candidateLimit: 80
   defaultResultLimit: 20
   maxResultLimit: 100
+  ranking:
+    relevance-weight: 0.65
+    business-weight: 0.35
+    order-count-weight: 0.5
+    search-priority-weight: 0.35
+    bestseller-weight: 0.15
   sync:
     enable-on-startup: true
     batch-size: 500

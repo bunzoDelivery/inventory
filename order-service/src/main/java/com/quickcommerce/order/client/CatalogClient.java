@@ -1,5 +1,6 @@
 package com.quickcommerce.order.client;
 
+import com.quickcommerce.order.dto.DeliveredOrderSkusRequest;
 import com.quickcommerce.order.dto.ProductListRequest;
 import com.quickcommerce.order.dto.ProductPriceResponse;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -37,6 +39,23 @@ public class CatalogClient {
                 .bodyValue(new ProductListRequest(skus))
                 .retrieve()
                 .bodyToFlux(ProductPriceResponse.class)
+                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
+                .transformDeferred(RetryOperator.of(retry));
+    }
+
+    /**
+     * Notifies catalog that an order was delivered: increments {@code order_count} once per distinct SKU.
+     */
+    public Mono<Void> recordDeliveredOrderSkus(List<String> distinctSkus) {
+        if (distinctSkus == null || distinctSkus.isEmpty()) {
+            return Mono.empty();
+        }
+        return webClient.post()
+                .uri(productServiceUrl + "/api/v1/internal/catalog/products/order-delivered")
+                .bodyValue(new DeliveredOrderSkusRequest(distinctSkus))
+                .retrieve()
+                .toBodilessEntity()
+                .then()
                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                 .transformDeferred(RetryOperator.of(retry));
     }

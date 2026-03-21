@@ -1,51 +1,35 @@
 package com.quickcommerce.search.service;
 
-import com.quickcommerce.search.dto.ProductResult;
 import com.quickcommerce.search.model.ProductDocument;
+import com.quickcommerce.search.ranking.SearchRankingStrategy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.List;
 
 /**
- * Service for ranking and sorting search results
- * Implements MVP ranking logic
+ * Facade for result ordering — delegates to {@link SearchRankingStrategy} (default: relevance + business blend).
+ * To change behavior, replace the strategy bean or tune {@code search.ranking.*}.
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class RankingService {
 
+    private final SearchRankingStrategy searchRankingStrategy;
+
     /**
-     * Ranks search results according to MVP priority rules
-     *
-     * Priority order:
-     * 1. In-stock (already filtered, all results are in-stock)
-     * 2. Bestseller flag (descending)
-     * 3. Search priority (descending)
-     * 4. Order count / popularity (descending)
-     * 5. Price (ascending - cheaper first as tie-breaker)
-     *
-     * @param documents List of product documents to rank
-     * @return Sorted list of documents
+     * @param documents Meilisearch hit order before ranking
+     * @return New list in ranked order (does not require the input list to be mutable)
      */
     public List<ProductDocument> rank(List<ProductDocument> documents) {
+        if (documents == null) {
+            return List.of();
+        }
         log.debug("Ranking {} documents", documents.size());
-
-        documents.sort(Comparator
-                // 1. Bestseller first (nulls last)
-                .comparing(ProductDocument::getIsBestseller,
-                        Comparator.nullsLast(Comparator.reverseOrder()))
-                // 2. Higher priority first (nulls last)
-                .thenComparing(ProductDocument::getSearchPriority,
-                        Comparator.nullsLast(Comparator.reverseOrder()))
-                // 3. More orders first (popularity, nulls last)
-                .thenComparing(ProductDocument::getOrderCount,
-                        Comparator.nullsLast(Comparator.reverseOrder()))
-                // 4. Lower price first (tie-breaker, nulls last)
-                .thenComparing(ProductDocument::getPrice,
-                        Comparator.nullsLast(Comparator.naturalOrder())));
-
+        // return searchRankingStrategy.rank(documents);
+        // TODO: Remove this later
         return documents;
     }
 }

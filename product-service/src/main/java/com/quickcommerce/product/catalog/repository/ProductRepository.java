@@ -1,6 +1,7 @@
 package com.quickcommerce.product.catalog.repository;
 
 import com.quickcommerce.product.catalog.domain.Product;
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
@@ -130,4 +131,12 @@ public interface ProductRepository extends R2dbcRepository<Product, Long>, Produ
     default Mono<Boolean> existsBySku(String sku) {
         return existsBySkuInt(sku).map(result -> result > 0);
     }
+
+    /**
+     * Increment order_count by 1 for the given SKU (one delivered order containing this SKU).
+     * Returns number of rows updated (0 if SKU unknown).
+     */
+    @Modifying
+    @Query("UPDATE products SET order_count = COALESCE(order_count, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE sku = :sku")
+    Mono<Integer> incrementOrderCountBySku(String sku);
 }

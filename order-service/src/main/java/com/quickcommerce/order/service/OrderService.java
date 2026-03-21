@@ -276,9 +276,32 @@ public class OrderService {
                                 OrderEvent event = OrderEvent.statusChanged(
                                         savedOrder.getId(), current, targetStatus, actorId);
                                 event.setNotes(notes);
+                                Mono<Void> afterDelivered = targetStatus == OrderStatus.DELIVERED
+                                        ? recordDeliveredOrderProductCounts(savedOrder.getId())
+                                        : Mono.empty();
                                 return orderEventRepo.save(event)
+                                        .then(afterDelivered)
                                         .then(buildFullResponse(savedOrder));
                             });
+                });
+    }
+
+    /**
+     * One {@code order_count} increment per distinct SKU for this delivered order (catalog semantics).
+     * Failure is logged but does not fail the status update (order flow remains authoritative).
+     */
+    private Mono<Void> recordDeliveredOrderProductCounts(Long orderId) {
+        return orderItemRepo.findByOrderId(orderId)
+                .map(OrderItem::getSku)
+                .filter(sku -> sku != null && !sku.isBlank())
+                .map(String::trim)
+                .distinct()
+                .collectList()
+                .filter(skus -> !skus.isEmpty())
+                .flatMap(catalogClient::recordDeliveredOrderSkus)
+                .onErrorResume(e -> {
+                    log.error("Failed to increment catalog order_count after delivery for orderId={}", orderId, e);
+                    return Mono.empty();
                 });
     }
 

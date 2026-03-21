@@ -55,6 +55,7 @@ class OrderServiceTest {
                 transactionalOperator
         );
         ReflectionTestUtils.setField(orderService, "deliveryFee", deliveryFee);
+        lenient().when(catalogClient.recordDeliveredOrderSkus(anyList())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -324,6 +325,25 @@ class OrderServiceTest {
                     assertThat(response.getStatus()).isEqualTo("PACKING");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void updateStatus_outForDeliveryToDelivered_shouldCallCatalogWithDistinctSkus() {
+        Order order = buildOrder(20L, "ORDER_UUID_20", OrderStatus.OUT_FOR_DELIVERY, PaymentStatus.PAID);
+        OrderItem i1 = buildOrderItem(20L, 20L, "SKU_A", 2, new BigDecimal("10.00"));
+        OrderItem i2 = buildOrderItem(21L, 20L, "SKU_A", 1, new BigDecimal("10.00"));
+        OrderItem i3 = buildOrderItem(22L, 20L, "SKU_B", 1, new BigDecimal("5.00"));
+
+        when(orderRepo.findByOrderUuid("ORDER_UUID_20")).thenReturn(Mono.just(order));
+        when(orderRepo.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(orderEventRepo.save(any())).thenReturn(Mono.just(new OrderEvent()));
+        when(orderItemRepo.findByOrderId(20L)).thenReturn(Flux.just(i1, i2, i3));
+
+        StepVerifier.create(orderService.updateStatus("ORDER_UUID_20", "DELIVERED", "STAFF", null))
+                .assertNext(response -> assertThat(response.getStatus()).isEqualTo("DELIVERED"))
+                .verifyComplete();
+
+        verify(catalogClient).recordDeliveredOrderSkus(List.of("SKU_A", "SKU_B"));
     }
 
     @Test

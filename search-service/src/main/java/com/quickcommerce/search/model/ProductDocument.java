@@ -134,4 +134,10 @@ public class ProductDocument {
      */
     @JsonProperty("orderCount")
     private Integer orderCount;
+
+    /**
+     * Meilisearch relevance score (0–1), present when {@code showRankingScore} is enabled on the search request.
+     */
+    @JsonProperty("_rankingScore")
+    private Double rankingScore;
 }

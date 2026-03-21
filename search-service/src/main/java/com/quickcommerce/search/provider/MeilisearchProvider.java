@@ -57,6 +57,7 @@ public class MeilisearchProvider {
                     .offset(offset)
                     .limit(pageSize)
                     .filter(new String[] { buildFilter(storeId) })
+                    .showRankingScore(true)
                     .attributesToRetrieve(new String[] {
                         "id", "sku", "name", "brand", "categoryId", "categoryName", "unitText", 
                         "price", "unitOfMeasure", "images", "slug", "isActive",
