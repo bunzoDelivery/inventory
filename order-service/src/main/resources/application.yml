@@ -89,6 +89,12 @@ payment:
   failsafe-interval-ms: ${PAYMENT_FAILSAFE_INTERVAL_MS:300}     # 55s in prod
   failsafe-cutoff-seconds: ${PAYMENT_FAILSAFE_CUTOFF_SECONDS:2}  # attempts idle >60s
 
+  # Checkout visibility toggles (MODULAR)
+  enabled-methods:
+    COD: ${PAYMENT_COD_ENABLED:true}
+    AIRTEL_MONEY: ${PAYMENT_AIRTEL_MONEY_ENABLED:true}
+    MTN_MONEY: ${PAYMENT_MTN_MONEY_ENABLED:true}
+
 # ─── PawaPay Config ───────────────────────────────────────────────────────────
 # Active when Spring profile includes "pawapay"
 # Dev/test: use "mock-pawapay" profile — no real credentials needed
