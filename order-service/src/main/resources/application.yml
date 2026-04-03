@@ -63,6 +63,13 @@ order:
   payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:15}
   cleanup-interval-ms: ${ORDER_CLEANUP_INTERVAL_MS:60000}
 
+# ─── Print Pricing Config ────────────────────────────────────────────────────
+print:
+  pricing:
+    base-price-bw: ${PRINT_BASE_PRICE_BW:2.00}
+    base-price-color: ${PRINT_BASE_PRICE_COLOR:5.00}
+    double-side-multiplier: ${PRINT_DOUBLE_SIDE_MULTIPLIER:1.5}
+
 # ─── Phone Validation Config ──────────────────────────────────────────────────
 # Set ACCEPT_INDIAN_PHONE_NUMBERS=true while testing from India (dev, staging, AWS prod).
 # Flip to false (or remove the env var) once the app goes live in Zambia only.
