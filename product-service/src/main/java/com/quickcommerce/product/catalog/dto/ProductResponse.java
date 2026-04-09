@@ -18,6 +18,7 @@ public class ProductResponse {
 
     private Long id;
     private String sku;
+    private String groupId;
     private String name;
     private String description;
     private String shortDescription;
@@ -41,11 +42,13 @@ public class ProductResponse {
     private Integer orderCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private java.util.List<VariantDto> availableVariants;
 
     public static ProductResponse fromDomain(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())
                 .sku(product.getSku())
+                .groupId(product.getGroupId())
                 .name(product.getName())
                 .description(product.getDescription())
                 .shortDescription(product.getShortDescription())

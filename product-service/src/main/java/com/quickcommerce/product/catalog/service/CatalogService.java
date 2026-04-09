@@ -140,8 +140,8 @@ public class CatalogService {
     /**
      * Recursively build category tree
      */
-    private CategoryTreeResponse buildCategoryTree(Category category, 
-                                                   java.util.Map<Long, java.util.List<Category>> childrenMap) {
+    private CategoryTreeResponse buildCategoryTree(Category category,
+            java.util.Map<Long, java.util.List<Category>> childrenMap) {
         CategoryTreeResponse node = CategoryTreeResponse.fromDomain(category);
 
         // Get children for this category
@@ -255,32 +255,43 @@ public class CatalogService {
 
     /**
      * Get products by category with pagination, optional sort and brand filter.
-     * Delegates to the dynamic query implementation (R2dbcEntityTemplate + Criteria API).
+     * Delegates to the dynamic query implementation (R2dbcEntityTemplate + Criteria
+     * API).
      */
     public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize,
-                                                             ProductSortOption sortBy, String brand) {
+            ProductSortOption sortBy, String brand) {
         long offset = (long) pageNum * pageSize;
         return Mono.zip(
                 productRepository.findByCategoryWithFilters(categoryId, sortBy, brand, pageSize, offset)
                         .map(ProductResponse::fromDomain)
                         .collectList(),
-                productRepository.countByCategoryWithFilters(categoryId, brand)
-        ).map(tuple -> {
-            java.util.List<ProductResponse> content = tuple.getT1();
-            long total = tuple.getT2();
-            int totalPages = (int) Math.ceil((double) total / pageSize);
-            return PagedProductResponse.builder()
-                    .content(content)
-                    .meta(PagedProductResponse.PageMeta.builder()
-                            .page(pageNum)
-                            .size(pageSize)
-                            .totalElements(total)
-                            .totalPages(totalPages)
-                            .first(pageNum == 0)
-                            .last(pageNum >= totalPages - 1 || totalPages == 0)
-                            .build())
-                    .build();
-        });
+                productRepository.countByCategoryWithFilters(categoryId, brand)).map(tuple -> {
+                    java.util.List<ProductResponse> content = tuple.getT1();
+                    com.quickcommerce.common.util.VariantGroupingUtil.attachVariants(
+                            content,
+                            ProductResponse::getGroupId,
+                            p -> com.quickcommerce.product.catalog.dto.VariantDto.builder()
+                                    .productId(p.getId())
+                                    .sku(p.getSku())
+                                    .size(p.getPackageSize())
+                                    .price(p.getBasePrice())
+                                    .isAvailable(p.getIsAvailable())
+                                    .build(),
+                            ProductResponse::setAvailableVariants);
+                    long total = tuple.getT2();
+                    int totalPages = (int) Math.ceil((double) total / pageSize);
+                    return PagedProductResponse.builder()
+                            .content(content)
+                            .meta(PagedProductResponse.PageMeta.builder()
+                                    .page(pageNum)
+                                    .size(pageSize)
+                                    .totalElements(total)
+                                    .totalPages(totalPages)
+                                    .first(pageNum == 0)
+                                    .last(pageNum >= totalPages - 1 || totalPages == 0)
+                                    .build())
+                            .build();
+                });
     }
 
     /**
@@ -308,14 +319,12 @@ public class CatalogService {
     public Flux<ProductResponse> getAllProducts() {
         return categoryRepository.findAll()
                 .collectMap(Category::getId, Category::getName)
-                .flatMapMany(categoryMap ->
-                    productRepository.findAll()
+                .flatMapMany(categoryMap -> productRepository.findAll()
                         .map(product -> {
                             ProductResponse resp = ProductResponse.fromDomain(product);
                             resp.setCategoryName(categoryMap.get(product.getCategoryId()));
                             return resp;
-                        })
-                );
+                        }));
     }
 
     /**
@@ -344,8 +353,10 @@ public class CatalogService {
     }
 
     /**
-     * Increments {@code order_count} by 1 for each distinct SKU — "how many delivered orders
-     * included this product" (not units sold). Idempotent at order level: only called on transition to DELIVERED.
+     * Increments {@code order_count} by 1 for each distinct SKU — "how many
+     * delivered orders
+     * included this product" (not units sold). Idempotent at order level: only
+     * called on transition to DELIVERED.
      */
     @Transactional
     public Mono<Void> incrementOrderCountsForDeliveredOrder(List<String> skus) {

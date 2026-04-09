@@ -45,14 +45,14 @@ public class SearchService {
     public Mono<SearchResponse> search(SearchRequest request) {
         // Increment search request counter
         searchMetrics.incrementSearchRequests();
-        
+
         return Mono.defer(() -> { // Defer for fresh context
             String normalizedQuery = normalizeQuery(request.getQuery());
 
             // Handle pagination with standard page/pageSize
             int page = request.getPage() != null ? request.getPage() : 1;
-            int pageSize = request.getPageSize() != null ? request.getPageSize() : 
-                searchProperties.getDefaultResultLimit();
+            int pageSize = request.getPageSize() != null ? request.getPageSize()
+                    : searchProperties.getDefaultResultLimit();
 
             log.info("Executing search: query='{}', storeId={}, page={}, size={}",
                     request.getQuery(), request.getStoreId(), page, pageSize);
@@ -117,7 +117,7 @@ public class SearchService {
                         searchMetrics.recordSearchDuration(timeMs);
                         searchMetrics.recordSearchResults(results.size());
                         searchMetrics.recordSearchByStore(request.getStoreId(), results.size());
-                        
+
                         if (results.isEmpty()) {
                             searchMetrics.incrementNoResults();
                         }
@@ -150,7 +150,8 @@ public class SearchService {
      * - Collapses multiple spaces to single space
      * - Lowercases for case-insensitive matching
      * - Collapses 3+ consecutive identical letters to 2 (key-repeat typo fix)
-     *   Only letters are affected; digits, hyphens, and special chars (7Up, Coca-Cola, 500ml) are preserved.
+     * Only letters are affected; digits, hyphens, and special chars (7Up,
+     * Coca-Cola, 500ml) are preserved.
      */
     private String normalizeQuery(String query) {
         if (query == null)
@@ -181,7 +182,8 @@ public class SearchService {
 
     /**
      * Filter products by stock availability using InventoryClient
-     * Implements "Smart Fallback" to Meilisearch index data if Inventory Service fails
+     * Implements "Smart Fallback" to Meilisearch index data if Inventory Service
+     * fails
      * Optimized with batching for large result sets
      */
     private Mono<List<ProductDocument>> filterByStock(List<ProductDocument> products, Long storeId) {
@@ -198,20 +200,20 @@ public class SearchService {
         if (productIds.size() > 50) {
             log.debug("Large product set ({}), using batched availability check", productIds.size());
             return reactor.core.publisher.Flux.fromIterable(productIds)
-                .buffer(50)
-                .flatMap(batch -> inventoryClient.checkAvailability(storeId, batch))
-                .collectList()
-                .map(responses -> {
-                    Map<Long, Boolean> combinedAvailability = new HashMap<>();
-                    for (var response : responses) {
-                        if (response.getAvailability() != null) {
-                            combinedAvailability.putAll(response.getAvailability());
+                    .buffer(50)
+                    .flatMap(batch -> inventoryClient.checkAvailability(storeId, batch))
+                    .collectList()
+                    .map(responses -> {
+                        Map<Long, Boolean> combinedAvailability = new HashMap<>();
+                        for (var response : responses) {
+                            if (response.getAvailability() != null) {
+                                combinedAvailability.putAll(response.getAvailability());
+                            }
                         }
-                    }
-                    return products.stream()
-                        .filter(product -> Boolean.TRUE.equals(combinedAvailability.get(product.getId())))
-                        .collect(Collectors.toList());
-                });
+                        return products.stream()
+                                .filter(product -> Boolean.TRUE.equals(combinedAvailability.get(product.getId())))
+                                .collect(Collectors.toList());
+                    });
         }
 
         return inventoryClient.checkAvailability(storeId, productIds)
@@ -247,10 +249,11 @@ public class SearchService {
      * Convert ProductDocument to ProductResult DTO (catalog-aligned)
      */
     private List<ProductResult> convertToProductResults(List<ProductDocument> documents) {
-        return documents.stream()
+        List<ProductResult> results = documents.stream()
                 .map(doc -> ProductResult.builder()
                         .productId(doc.getId())
                         .sku(doc.getSku())
+                        .groupId(doc.getGroupId())
                         .name(doc.getName())
                         .brand(doc.getBrand())
                         .categoryId(doc.getCategoryId())
@@ -262,5 +265,19 @@ public class SearchService {
                         .inStock(true) // All results are in-stock after filtering
                         .build())
                 .collect(Collectors.toList());
+
+        com.quickcommerce.common.util.VariantGroupingUtil.attachVariants(
+                results,
+                ProductResult::getGroupId,
+                p -> com.quickcommerce.search.dto.VariantDto.builder()
+                        .productId(p.getProductId())
+                        .sku(p.getSku())
+                        .size(p.getPackageSize())
+                        .price(p.getBasePrice())
+                        .inStock(p.getInStock())
+                        .build(),
+                ProductResult::setAvailableVariants);
+
+        return results;
     }
 }

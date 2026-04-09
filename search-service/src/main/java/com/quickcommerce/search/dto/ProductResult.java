@@ -29,6 +29,11 @@ public class ProductResult {
     private String sku;
 
     /**
+     * Group identifier to connect related variants
+     */
+    private String groupId;
+
+    /**
      * Product name
      */
     private String name;
@@ -72,4 +77,9 @@ public class ProductResult {
      * Stock availability flag (search-specific)
      */
     private Boolean inStock;
+
+    /**
+     * List of other variants in this product's group
+     */
+    private java.util.List<VariantDto> availableVariants;
 }

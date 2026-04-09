@@ -19,6 +19,7 @@ public class CatalogProductDto {
 
     private Long id;
     private String sku;
+    private String groupId;
     private String name;
     private String description;
     private String shortDescription;
