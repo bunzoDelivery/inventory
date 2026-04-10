@@ -1,12 +1,14 @@
 package com.quickcommerce.product.catalog.dto;
 
 import com.quickcommerce.product.catalog.domain.Product;
+import com.quickcommerce.product.util.ImageJsonUtils;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -25,7 +27,7 @@ public class ProductResponse {
     private BigDecimal basePrice;
     private String unitOfMeasure;
     private String packageSize;
-    private String images;
+    private List<String> images;
     private String tags;
     private Boolean isActive;
     private Boolean isAvailable;
@@ -52,7 +54,7 @@ public class ProductResponse {
                 .basePrice(product.getBasePrice())
                 .unitOfMeasure(product.getUnitOfMeasure())
                 .packageSize(product.getPackageSize())
-                .images(product.getImages())
+                .images(ImageJsonUtils.parseImages(product.getImages()))
                 .tags(product.getTags())
                 .isActive(product.getIsActive())
                 .isAvailable(product.getIsAvailable())

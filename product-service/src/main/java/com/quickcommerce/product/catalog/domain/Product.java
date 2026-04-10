@@ -69,9 +69,10 @@ public class Product {
     private String packageSize;
 
     /**
-     * JSON array of image URLs
-     * Example: ["https://cdn.example.com/product1.jpg",
-     * "https://cdn.example.com/product2.jpg"]
+     * JSON array of r2Key strings stored as TEXT/JSON in MySQL.
+     * Example: ["products/a1b2c3/original.jpg", "products/d4e5f6/original.jpg"]
+     * First element = primary image. Array order = display order.
+     * DTOs expose this as List&lt;String&gt; via ImageJsonUtils.
      */
     private String images;
 

@@ -1,11 +1,13 @@
 package com.quickcommerce.search.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -55,6 +57,23 @@ public class GlobalExceptionHandler {
         return Mono.just(ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(createErrorResponse(HttpStatus.BAD_REQUEST, message)));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleResponseStatus(ResponseStatusException ex) {
+        log.warn("Request error: {} {}", ex.getStatusCode(), ex.getReason());
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) status = HttpStatus.BAD_REQUEST;
+        String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        return Mono.just(ResponseEntity.status(status).body(createErrorResponse(status, message)));
+    }
+
+    @ExceptionHandler(DecodingException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleDecodingException(DecodingException ex) {
+        log.warn("Malformed request body: {}", ex.getMessage());
+        return Mono.just(ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(createErrorResponse(HttpStatus.BAD_REQUEST, "Malformed request body: " + ex.getMessage())));
     }
 
     @ExceptionHandler(Exception.class)

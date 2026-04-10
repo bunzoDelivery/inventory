@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Individual product result in search response.
@@ -58,9 +59,9 @@ public class ProductResult {
     private String packageSize;
 
     /**
-     * Product images (full JSON array string, same as catalog)
+     * Product image r2Keys (JSON array, same as catalog)
      */
-    private String images;
+    private List<String> images;
 
     /**
      * Product slug (URL-friendly identifier)

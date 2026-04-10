@@ -35,6 +35,7 @@
         <meilisearch-java.version>0.18.0</meilisearch-java.version>
         <resilience4j.version>2.1.0</resilience4j.version>
         <lombok.version>1.18.30</lombok.version>
+        <aws-sdk.version>2.42.30</aws-sdk.version>
     </properties>
 
     <dependencyManagement>
@@ -103,6 +104,15 @@
                 <groupId>io.github.resilience4j</groupId>
                 <artifactId>resilience4j-bom</artifactId>
                 <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- AWS SDK v2 BOM (for S3-compatible storage: Cloudflare R2, MinIO) -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws-sdk.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

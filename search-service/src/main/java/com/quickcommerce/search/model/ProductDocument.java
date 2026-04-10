@@ -112,10 +112,10 @@ public class ProductDocument {
     private String slug;
 
     /**
-     * Product images (full JSON array string from catalog)
+     * Product image r2Keys from catalog
      */
     @JsonProperty("images")
-    private String images;
+    private List<String> images;
 
     /**
      * Search priority (0-100, higher = better)

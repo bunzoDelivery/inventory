@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * DTO representing a single product with inventory data for bulk sync
@@ -45,7 +46,7 @@ public class ProductSyncItem {
     
     private String packageSize;
     
-    private String images;
+    private List<String> images;
     
     private String tags;
     

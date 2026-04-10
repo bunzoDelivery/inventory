@@ -124,6 +124,12 @@
             <artifactId>mysql-connector-j</artifactId>
         </dependency>
 
+        <!-- AWS SDK v2 S3 (async client for Cloudflare R2 / MinIO) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+
         <!-- Monitoring and Observability -->
         <dependency>
             <groupId>io.micrometer</groupId>

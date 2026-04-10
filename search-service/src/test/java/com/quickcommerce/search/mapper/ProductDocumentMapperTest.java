@@ -5,6 +5,7 @@ import com.quickcommerce.search.model.ProductDocument;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,7 +16,7 @@ class ProductDocumentMapperTest {
         CatalogProductDto dto = new CatalogProductDto();
         dto.setId(1L);
         dto.setName("Milk");
-        dto.setImages("[\"https://a.com/1.jpg\",\"https://a.com/2.jpg\"]");
+        dto.setImages(List.of("products/abc/original.jpg", "products/def/original.jpg"));
         dto.setBasePrice(BigDecimal.valueOf(25.00));
         dto.setPackageSize("1L");
         dto.setSku("MILK-001");
@@ -23,7 +24,7 @@ class ProductDocumentMapperTest {
 
         ProductDocument doc = ProductDocumentMapper.toProductDocument(dto);
 
-        assertThat(doc.getImages()).isEqualTo("[\"https://a.com/1.jpg\",\"https://a.com/2.jpg\"]");
+        assertThat(doc.getImages()).containsExactly("products/abc/original.jpg", "products/def/original.jpg");
         assertThat(doc.getPrice()).isEqualByComparingTo(BigDecimal.valueOf(25.00));
         assertThat(doc.getUnitText()).isEqualTo("1L");
         assertThat(doc.getSku()).isEqualTo("MILK-001");

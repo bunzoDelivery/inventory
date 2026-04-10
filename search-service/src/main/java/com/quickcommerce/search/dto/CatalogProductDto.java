@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * DTO mirroring catalog API (ProductResponse) for deserialization.
@@ -26,7 +27,7 @@ public class CatalogProductDto {
     private BigDecimal basePrice;
     private String unitOfMeasure;
     private String packageSize;
-    private String images;
+    private List<String> images;
     private String tags;
     private Boolean isActive;
     private Boolean isAvailable;

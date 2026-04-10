@@ -10,6 +10,7 @@ import com.quickcommerce.product.dto.BulkSyncResponse.ItemResult;
 import com.quickcommerce.product.dto.ProductSyncItem;
 import com.quickcommerce.product.repository.InventoryItemRepository;
 import com.quickcommerce.product.repository.StoreRepository;
+import com.quickcommerce.product.util.ImageJsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -172,7 +173,7 @@ public class ProductSyncService {
         product.setBasePrice(item.getBasePrice());
         product.setUnitOfMeasure(item.getUnitOfMeasure());
         product.setPackageSize(item.getPackageSize());
-        product.setImages(item.getImages());
+        product.setImages(ImageJsonUtils.toJson(item.getImages()));
         product.setTags(item.getTags());
         product.setIsActive(item.getIsActive());
         product.setIsAvailable(item.getIsAvailable());
@@ -233,7 +234,7 @@ public class ProductSyncService {
         product.setBasePrice(item.getBasePrice());
         product.setUnitOfMeasure(item.getUnitOfMeasure());
         product.setPackageSize(item.getPackageSize());
-        product.setImages(item.getImages());
+        product.setImages(ImageJsonUtils.toJson(item.getImages()));
         product.setTags(item.getTags());
         product.setIsActive(item.getIsActive());
         product.setIsAvailable(item.getIsAvailable());

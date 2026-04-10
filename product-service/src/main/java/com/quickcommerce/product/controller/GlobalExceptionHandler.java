@@ -8,10 +8,12 @@ import com.quickcommerce.product.exception.ReservationNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebInputException;
 import reactor.core.publisher.Mono;
 
@@ -101,6 +103,24 @@ public class GlobalExceptionHandler {
         log.warn("Type mismatch: {}", message);
 
         Map<String, Object> error = createErrorResponse("INVALID_PARAMETER", message, HttpStatus.BAD_REQUEST);
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleResponseStatus(ResponseStatusException ex) {
+        log.warn("Request error: {} {}", ex.getStatusCode(), ex.getReason());
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) status = HttpStatus.BAD_REQUEST;
+        String message = ex.getReason() != null ? ex.getReason() : ex.getMessage();
+        Map<String, Object> error = createErrorResponse(status.name().replace(" ", "_"), message, status);
+        return Mono.just(ResponseEntity.status(status).body(error));
+    }
+
+    @ExceptionHandler(DecodingException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleDecodingException(DecodingException ex) {
+        log.warn("Malformed multipart/request body: {}", ex.getMessage());
+        Map<String, Object> error = createErrorResponse("BAD_REQUEST",
+                "Malformed request body: " + ex.getMessage(), HttpStatus.BAD_REQUEST);
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error));
     }
 

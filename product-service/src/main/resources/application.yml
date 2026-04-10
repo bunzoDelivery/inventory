@@ -4,6 +4,9 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:}
   
+  codec:
+    max-in-memory-size: 5MB
+
   # Disable RabbitMQ for MVP
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
@@ -97,6 +100,15 @@ inventory:
   sync:
     batch-size: 50
     max-request-size: 500
+
+# Object Storage (Cloudflare R2)
+# Credentials must be supplied via environment variables — no defaults here.
+r2:
+  access-key-id: ${R2_ACCESS_KEY_ID}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY}
+  endpoint: ${R2_ENDPOINT}
+  bucket: ${R2_BUCKET}
+  region: ${R2_REGION:auto}
 
 # Messaging Configuration - DISABLED for MVP
 messaging:

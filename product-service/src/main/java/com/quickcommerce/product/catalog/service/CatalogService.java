@@ -7,6 +7,7 @@ import com.quickcommerce.product.catalog.dto.ProductSortOption;
 import com.quickcommerce.product.catalog.repository.CategoryRepository;
 import com.quickcommerce.product.catalog.repository.ProductRepository;
 import com.quickcommerce.common.exception.ResourceNotFoundException;
+import com.quickcommerce.product.util.ImageJsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -188,7 +189,7 @@ public class CatalogService {
                                 product.setBasePrice(request.getBasePrice());
                                 product.setUnitOfMeasure(request.getUnitOfMeasure());
                                 product.setPackageSize(request.getPackageSize());
-                                product.setImages(request.getImages());
+                                product.setImages(ImageJsonUtils.toJson(request.getImages()));
                                 product.setTags(request.getTags());
                                 product.setIsActive(request.getIsActive());
                                 product.setIsAvailable(request.getIsAvailable());

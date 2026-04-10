@@ -102,7 +102,7 @@ public class TestDatabaseInitializer {
                             base_price DECIMAL(10, 2) NOT NULL,
                             unit_of_measure VARCHAR(50) NOT NULL,
                             package_size VARCHAR(100),
-                            images TEXT,
+                            images JSON,
                             tags VARCHAR(500),
                             is_active BOOLEAN DEFAULT TRUE,
                             is_available BOOLEAN DEFAULT TRUE,
