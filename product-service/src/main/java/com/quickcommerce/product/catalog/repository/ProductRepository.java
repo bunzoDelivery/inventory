@@ -153,6 +153,6 @@ public interface ProductRepository extends R2dbcRepository<Product, Long>, Produ
      * Returns each distinct group_id with the count of active variants in that group.
      * Used by GET /api/v1/catalog/products/groups for admin discoverability.
      */
-    @Query("SELECT group_id AS groupId, COUNT(*) AS variantCount FROM products WHERE group_id IS NOT NULL AND is_active = true GROUP BY group_id ORDER BY group_id")
+    @Query("SELECT group_id, COUNT(*) AS variant_count FROM products WHERE group_id IS NOT NULL AND is_active = true GROUP BY group_id ORDER BY group_id")
     Flux<com.quickcommerce.product.catalog.dto.GroupSummary> findAllGroupSummaries();
 }

@@ -445,7 +445,16 @@ public class CatalogService {
                 .replaceAll("(?i)\\s+pack\\s+of\\s+\\d+\\s*$", "")
                 .replaceAll("(?i)\\s*\\d+(\\.\\d+)?\\s*(ml|l|litre|litres|g|gm|gms|kg|pcs?|pieces?)\\s*$", "")
                 .trim();
-        return (brand + "-" + baseName)
+        // Strip redundant brand prefix from name when the name already starts with the brand
+        // e.g. brand="Amul", name="Amul Butter" → baseName becomes "Butter", slug = "amul-butter"
+        String brandTrimmed = brand.trim();
+        if (baseName.toLowerCase().startsWith(brandTrimmed.toLowerCase())) {
+            String afterBrand = baseName.substring(brandTrimmed.length()).trim();
+            if (!afterBrand.isEmpty()) {
+                baseName = afterBrand;
+            }
+        }
+        return (brandTrimmed + "-" + baseName)
                 .toLowerCase()
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-|-$", "");

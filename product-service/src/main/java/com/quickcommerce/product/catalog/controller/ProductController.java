@@ -6,11 +6,11 @@ import com.quickcommerce.product.catalog.dto.GroupSummary;
 import com.quickcommerce.product.catalog.dto.PagedProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductSortOption;
+import com.quickcommerce.product.catalog.dto.VariantGroupBatchRequest;
 import com.quickcommerce.product.catalog.service.CatalogService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -148,15 +148,16 @@ public class ProductController {
      * Mobile calls this in the background after receiving a listing page, caching the
      * results so that tapping +ADD opens the bottom sheet instantly.
      *
-     * GET /api/v1/catalog/products/groups/batch?ids=amul-taaza-milk,maggi-noodles
+     * POST /api/v1/catalog/products/groups/batch
+     * Body: { "groupIds": ["amul-taaza-milk", "maggi-noodles"] }
      * → { "amul-taaza-milk": [ { productId, sku, size, price, inStock }, ... ], ... }
      *
      * Max 50 group IDs per request (one listing page worth).
      */
-    @GetMapping("/groups/batch")
+    @PostMapping("/groups/batch")
     public Mono<Map<String, List<VariantDto>>> getVariantGroups(
-            @RequestParam @Size(max = 50, message = "Maximum 50 group IDs per request") List<String> ids) {
-        return catalogService.getVariantGroups(ids);
+            @Valid @RequestBody VariantGroupBatchRequest request) {
+        return catalogService.getVariantGroups(request.getGroupIds());
     }
 
     /**
