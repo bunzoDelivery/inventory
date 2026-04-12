@@ -11,6 +11,7 @@ import java.util.List;
 /**
  * Individual product result in search response.
  * Aligned with ProductResponse (catalog API) for consistency.
+ * Use GET /api/v1/catalog/products/groups/batch to fetch variant data for the bottom sheet.
  */
 @Data
 @Builder
@@ -77,9 +78,4 @@ public class ProductResult {
      * Stock availability flag (search-specific)
      */
     private Boolean inStock;
-
-    /**
-     * List of other variants in this product's group
-     */
-    private java.util.List<VariantDto> availableVariants;
 }

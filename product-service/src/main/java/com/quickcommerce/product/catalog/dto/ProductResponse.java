@@ -42,7 +42,6 @@ public class ProductResponse {
     private Integer orderCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private java.util.List<VariantDto> availableVariants;
 
     public static ProductResponse fromDomain(Product product) {
         return ProductResponse.builder()

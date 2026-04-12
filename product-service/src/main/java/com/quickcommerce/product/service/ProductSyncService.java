@@ -2,6 +2,7 @@ package com.quickcommerce.product.service;
 
 import com.quickcommerce.product.catalog.domain.Product;
 import com.quickcommerce.product.catalog.repository.ProductRepository;
+import com.quickcommerce.product.catalog.service.CatalogService;
 import com.quickcommerce.product.config.InventoryProperties;
 import com.quickcommerce.product.domain.InventoryItem;
 import com.quickcommerce.product.dto.BulkSyncRequest;
@@ -20,7 +21,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -165,6 +165,7 @@ public class ProductSyncService {
     private Product mapToProduct(ProductSyncItem item) {
         Product product = new Product();
         product.setSku(item.getSku());
+        product.setGroupId(CatalogService.resolveGroupId(item.getGroupId(), item.getBrand(), item.getName()));
         product.setName(item.getName());
         product.setDescription(item.getDescription());
         product.setShortDescription(item.getShortDescription());
@@ -226,6 +227,7 @@ public class ProductSyncService {
      * Update product fields from sync item
      */
     private void updateProductFields(Product product, ProductSyncItem item) {
+        product.setGroupId(CatalogService.resolveGroupId(item.getGroupId(), item.getBrand(), item.getName()));
         product.setName(item.getName());
         product.setDescription(item.getDescription());
         product.setShortDescription(item.getShortDescription());

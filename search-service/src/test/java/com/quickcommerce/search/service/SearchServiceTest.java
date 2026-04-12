@@ -170,6 +170,88 @@ class SearchServiceTest {
         }
 
         @Test
+        void search_shouldIncludeGroupId_inProductResults() {
+                // Arrange
+                ProductDocument docWithGroup = ProductDocument.builder()
+                                .id(200L)
+                                .name("Amul Taaza Milk 1L")
+                                .isActive(true)
+                                .storeIds(List.of(1L))
+                                .groupId("amul-taaza-milk")
+                                .build();
+
+                when(meilisearchProvider.search(anyString(), anyLong(), anyInt(), anyInt()))
+                                .thenReturn(Mono.just(searchResult));
+
+                ArrayList<HashMap<String, Object>> hits = new ArrayList<>();
+                HashMap<String, Object> hit = new HashMap<>();
+                hit.put("id", 200);
+                hits.add(hit);
+                when(searchResult.getHits()).thenReturn(hits);
+                when(searchResult.getEstimatedTotalHits()).thenReturn(1);
+                when(objectMapper.convertValue(anyMap(), eq(ProductDocument.class)))
+                                .thenReturn(docWithGroup);
+
+                AvailabilityResponse availResponse = AvailabilityResponse.builder()
+                                .storeId(1L)
+                                .availability(Map.of(200L, true))
+                                .build();
+                when(inventoryClient.checkAvailability(anyLong(), anyList()))
+                                .thenReturn(Mono.just(availResponse));
+                when(rankingService.rank(anyList())).thenReturn(List.of(docWithGroup));
+
+                // Act + Assert
+                StepVerifier.create(searchService.search(searchRequest))
+                                .expectNextMatches(response -> {
+                                        var result = response.getResults().get(0);
+                                        return "amul-taaza-milk".equals(result.getGroupId())
+                                                        && result.getProductId() == 200L;
+                                })
+                                .verifyComplete();
+        }
+
+        @Test
+        void search_shouldReturnNullGroupId_whenProductHasNoGroup() {
+                // Arrange — document with no groupId set
+                ProductDocument docWithoutGroup = ProductDocument.builder()
+                                .id(300L)
+                                .name("Some Generic Product")
+                                .isActive(true)
+                                .storeIds(List.of(1L))
+                                .groupId(null)
+                                .build();
+
+                when(meilisearchProvider.search(anyString(), anyLong(), anyInt(), anyInt()))
+                                .thenReturn(Mono.just(searchResult));
+
+                ArrayList<HashMap<String, Object>> hits = new ArrayList<>();
+                HashMap<String, Object> hit = new HashMap<>();
+                hit.put("id", 300);
+                hits.add(hit);
+                when(searchResult.getHits()).thenReturn(hits);
+                when(searchResult.getEstimatedTotalHits()).thenReturn(1);
+                when(objectMapper.convertValue(anyMap(), eq(ProductDocument.class)))
+                                .thenReturn(docWithoutGroup);
+
+                AvailabilityResponse availResponse = AvailabilityResponse.builder()
+                                .storeId(1L)
+                                .availability(Map.of(300L, true))
+                                .build();
+                when(inventoryClient.checkAvailability(anyLong(), anyList()))
+                                .thenReturn(Mono.just(availResponse));
+                when(rankingService.rank(anyList())).thenReturn(List.of(docWithoutGroup));
+
+                // Act + Assert
+                StepVerifier.create(searchService.search(searchRequest))
+                                .expectNextMatches(response -> {
+                                        var result = response.getResults().get(0);
+                                        return result.getGroupId() == null
+                                                        && result.getProductId() == 300L;
+                                })
+                                .verifyComplete();
+        }
+
+        @Test
         void search_shouldPreprocessQuery_beforeCallingMeilisearch() {
                 // Arrange: query with key-repeat typo and extra spaces
                 SearchRequest request = SearchRequest.builder()

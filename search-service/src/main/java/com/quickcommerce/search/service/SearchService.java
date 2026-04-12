@@ -249,7 +249,7 @@ public class SearchService {
      * Convert ProductDocument to ProductResult DTO (catalog-aligned)
      */
     private List<ProductResult> convertToProductResults(List<ProductDocument> documents) {
-        List<ProductResult> results = documents.stream()
+        return documents.stream()
                 .map(doc -> ProductResult.builder()
                         .productId(doc.getId())
                         .sku(doc.getSku())
@@ -265,19 +265,5 @@ public class SearchService {
                         .inStock(true) // All results are in-stock after filtering
                         .build())
                 .collect(Collectors.toList());
-
-        com.quickcommerce.common.util.VariantGroupingUtil.attachVariants(
-                results,
-                ProductResult::getGroupId,
-                p -> com.quickcommerce.search.dto.VariantDto.builder()
-                        .productId(p.getProductId())
-                        .sku(p.getSku())
-                        .size(p.getPackageSize())
-                        .price(p.getBasePrice())
-                        .inStock(p.getInStock())
-                        .build(),
-                ProductResult::setAvailableVariants);
-
-        return results;
     }
 }
