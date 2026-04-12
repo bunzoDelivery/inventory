@@ -32,6 +32,12 @@ public class ProductDocument {
     private String sku;
 
     /**
+     * Group identifier to connect related variants
+     */
+    @JsonProperty("groupId")
+    private String groupId;
+
+    /**
      * Product name
      */
     @JsonProperty("name")
@@ -136,7 +142,8 @@ public class ProductDocument {
     private Integer orderCount;
 
     /**
-     * Meilisearch relevance score (0–1), present when {@code showRankingScore} is enabled on the search request.
+     * Meilisearch relevance score (0–1), present when {@code showRankingScore} is
+     * enabled on the search request.
      */
     @JsonProperty("_rankingScore")
     private Double rankingScore;

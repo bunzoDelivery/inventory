@@ -18,6 +18,12 @@ public class CreateProductRequest {
     @NotBlank(message = "SKU is required")
     private String sku;
 
+    /**
+     * Optional. Groups this SKU with related size/pack variants for the bottom sheet.
+     * If omitted, auto-generated from brand + base product name.
+     */
+    private String groupId;
+
     @NotBlank(message = "Product name is required")
     private String name;
 

@@ -11,6 +11,7 @@ import java.util.List;
 /**
  * Individual product result in search response.
  * Aligned with ProductResponse (catalog API) for consistency.
+ * Use GET /api/v1/catalog/products/groups/batch to fetch variant data for the bottom sheet.
  */
 @Data
 @Builder
@@ -27,6 +28,11 @@ public class ProductResult {
      * Stock Keeping Unit
      */
     private String sku;
+
+    /**
+     * Group identifier to connect related variants
+     */
+    private String groupId;
 
     /**
      * Product name

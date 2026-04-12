@@ -29,6 +29,11 @@ public class Product {
     private String sku;
 
     /**
+     * Group identifier to connect related variants (e.g. sizes)
+     */
+    private String groupId;
+
+    /**
      * Product name
      */
     private String name;

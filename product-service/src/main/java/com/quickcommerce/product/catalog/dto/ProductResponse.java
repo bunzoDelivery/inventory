@@ -18,6 +18,7 @@ public class ProductResponse {
 
     private Long id;
     private String sku;
+    private String groupId;
     private String name;
     private String description;
     private String shortDescription;
@@ -46,6 +47,7 @@ public class ProductResponse {
         return ProductResponse.builder()
                 .id(product.getId())
                 .sku(product.getSku())
+                .groupId(product.getGroupId())
                 .name(product.getName())
                 .description(product.getDescription())
                 .shortDescription(product.getShortDescription())

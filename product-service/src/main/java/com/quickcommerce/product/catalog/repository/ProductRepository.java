@@ -139,4 +139,20 @@ public interface ProductRepository extends R2dbcRepository<Product, Long>, Produ
     @Modifying
     @Query("UPDATE products SET order_count = COALESCE(order_count, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE sku = :sku")
     Mono<Integer> incrementOrderCountBySku(String sku);
+
+    /**
+     * Fetch all active variants belonging to any of the given group IDs.
+     * Ordered by base_price ASC, id ASC so the cheapest variant is always first —
+     * works universally for volume, weight, pack count, and unit-based variants.
+     * Used by GET /api/v1/catalog/products/groups/batch.
+     */
+    @Query("SELECT * FROM products WHERE group_id IN (:groupIds) AND is_active = true ORDER BY base_price ASC, id ASC")
+    Flux<Product> findByGroupIdIn(java.util.List<String> groupIds);
+
+    /**
+     * Returns each distinct group_id with the count of active variants in that group.
+     * Used by GET /api/v1/catalog/products/groups for admin discoverability.
+     */
+    @Query("SELECT group_id, COUNT(*) AS variant_count FROM products WHERE group_id IS NOT NULL AND is_active = true GROUP BY group_id ORDER BY group_id")
+    Flux<com.quickcommerce.product.catalog.dto.GroupSummary> findAllGroupSummaries();
 }

@@ -1,9 +1,12 @@
 package com.quickcommerce.product.catalog.controller;
 
+import com.quickcommerce.common.dto.VariantDto;
 import com.quickcommerce.product.catalog.dto.CreateProductRequest;
+import com.quickcommerce.product.catalog.dto.GroupSummary;
 import com.quickcommerce.product.catalog.dto.PagedProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductResponse;
 import com.quickcommerce.product.catalog.dto.ProductSortOption;
+import com.quickcommerce.product.catalog.dto.VariantGroupBatchRequest;
 import com.quickcommerce.product.catalog.service.CatalogService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -15,6 +18,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * REST controller for product operations
@@ -133,5 +139,36 @@ public class ProductController {
             @RequestParam Double minPrice,
             @RequestParam Double maxPrice) {
         return catalogService.getProductsByPriceRange(minPrice, maxPrice);
+    }
+
+    // ============ Variant Group Endpoints ============
+
+    /**
+     * Batch fetch variant groups for the bottom sheet.
+     * Mobile calls this in the background after receiving a listing page, caching the
+     * results so that tapping +ADD opens the bottom sheet instantly.
+     *
+     * POST /api/v1/catalog/products/groups/batch
+     * Body: { "groupIds": ["amul-taaza-milk", "maggi-noodles"] }
+     * → { "amul-taaza-milk": [ { productId, sku, size, price, inStock }, ... ], ... }
+     *
+     * Max 50 group IDs per request (one listing page worth).
+     */
+    @PostMapping("/groups/batch")
+    public Mono<Map<String, List<VariantDto>>> getVariantGroups(
+            @Valid @RequestBody VariantGroupBatchRequest request) {
+        return catalogService.getVariantGroups(request.getGroupIds());
+    }
+
+    /**
+     * List all distinct group IDs with their variant count.
+     * Admin-facing: use this to verify grouping and copy-paste IDs when creating products manually.
+     *
+     * GET /api/v1/catalog/products/groups
+     * → [ { "groupId": "amul-taaza-milk", "variantCount": 3 }, ... ]
+     */
+    @GetMapping("/groups")
+    public Flux<GroupSummary> getAllGroups() {
+        return catalogService.getAllGroupSummaries();
     }
 }

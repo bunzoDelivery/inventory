@@ -6,6 +6,7 @@ import com.quickcommerce.product.catalog.dto.*;
 import com.quickcommerce.product.catalog.dto.ProductSortOption;
 import com.quickcommerce.product.catalog.repository.CategoryRepository;
 import com.quickcommerce.product.catalog.repository.ProductRepository;
+import com.quickcommerce.common.dto.VariantDto;
 import com.quickcommerce.common.exception.ResourceNotFoundException;
 import com.quickcommerce.product.util.ImageJsonUtils;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing catalog operations (categories and products)
@@ -140,8 +144,8 @@ public class CatalogService {
     /**
      * Recursively build category tree
      */
-    private CategoryTreeResponse buildCategoryTree(Category category, 
-                                                   java.util.Map<Long, java.util.List<Category>> childrenMap) {
+    private CategoryTreeResponse buildCategoryTree(Category category,
+            java.util.Map<Long, java.util.List<Category>> childrenMap) {
         CategoryTreeResponse node = CategoryTreeResponse.fromDomain(category);
 
         // Get children for this category
@@ -181,6 +185,7 @@ public class CatalogService {
                             .then(Mono.defer(() -> {
                                 Product product = new Product();
                                 product.setSku(request.getSku());
+                                product.setGroupId(resolveGroupId(request.getGroupId(), request.getBrand(), request.getName()));
                                 product.setName(request.getName());
                                 product.setDescription(request.getDescription());
                                 product.setShortDescription(request.getShortDescription());
@@ -255,32 +260,32 @@ public class CatalogService {
 
     /**
      * Get products by category with pagination, optional sort and brand filter.
-     * Delegates to the dynamic query implementation (R2dbcEntityTemplate + Criteria API).
+     * Delegates to the dynamic query implementation (R2dbcEntityTemplate + Criteria
+     * API).
      */
     public Mono<PagedProductResponse> getProductsByCategory(Long categoryId, int pageNum, int pageSize,
-                                                             ProductSortOption sortBy, String brand) {
+            ProductSortOption sortBy, String brand) {
         long offset = (long) pageNum * pageSize;
         return Mono.zip(
                 productRepository.findByCategoryWithFilters(categoryId, sortBy, brand, pageSize, offset)
                         .map(ProductResponse::fromDomain)
                         .collectList(),
-                productRepository.countByCategoryWithFilters(categoryId, brand)
-        ).map(tuple -> {
-            java.util.List<ProductResponse> content = tuple.getT1();
-            long total = tuple.getT2();
-            int totalPages = (int) Math.ceil((double) total / pageSize);
-            return PagedProductResponse.builder()
-                    .content(content)
-                    .meta(PagedProductResponse.PageMeta.builder()
-                            .page(pageNum)
-                            .size(pageSize)
-                            .totalElements(total)
-                            .totalPages(totalPages)
-                            .first(pageNum == 0)
-                            .last(pageNum >= totalPages - 1 || totalPages == 0)
-                            .build())
-                    .build();
-        });
+                productRepository.countByCategoryWithFilters(categoryId, brand)).map(tuple -> {
+                    java.util.List<ProductResponse> content = tuple.getT1();
+                    long total = tuple.getT2();
+                    int totalPages = (int) Math.ceil((double) total / pageSize);
+                    return PagedProductResponse.builder()
+                            .content(content)
+                            .meta(PagedProductResponse.PageMeta.builder()
+                                    .page(pageNum)
+                                    .size(pageSize)
+                                    .totalElements(total)
+                                    .totalPages(totalPages)
+                                    .first(pageNum == 0)
+                                    .last(pageNum >= totalPages - 1 || totalPages == 0)
+                                    .build())
+                            .build();
+                });
     }
 
     /**
@@ -308,14 +313,12 @@ public class CatalogService {
     public Flux<ProductResponse> getAllProducts() {
         return categoryRepository.findAll()
                 .collectMap(Category::getId, Category::getName)
-                .flatMapMany(categoryMap ->
-                    productRepository.findAll()
+                .flatMapMany(categoryMap -> productRepository.findAll()
                         .map(product -> {
                             ProductResponse resp = ProductResponse.fromDomain(product);
                             resp.setCategoryName(categoryMap.get(product.getCategoryId()));
                             return resp;
-                        })
-                );
+                        }));
     }
 
     /**
@@ -344,8 +347,10 @@ public class CatalogService {
     }
 
     /**
-     * Increments {@code order_count} by 1 for each distinct SKU — "how many delivered orders
-     * included this product" (not units sold). Idempotent at order level: only called on transition to DELIVERED.
+     * Increments {@code order_count} by 1 for each distinct SKU — "how many
+     * delivered orders
+     * included this product" (not units sold). Idempotent at order level: only
+     * called on transition to DELIVERED.
      */
     @Transactional
     public Mono<Void> incrementOrderCountsForDeliveredOrder(List<String> skus) {
@@ -366,5 +371,92 @@ public class CatalogService {
                         .doOnError(e -> log.warn("Failed order_count increment for sku={}: {}", sku, e.getMessage()))
                         .onErrorResume(e -> Mono.just(0)))
                 .then();
+    }
+
+    // ============ Variant Group Operations ============
+
+    /**
+     * Fetches all active variants for the given group IDs in a single DB query.
+     * Results are ordered by base_price ASC, id ASC (cheapest first).
+     * Used by GET /api/v1/catalog/products/groups/batch for mobile bottom-sheet prefetch.
+     *
+     * @param groupIds up to 50 group IDs (one listing page worth)
+     * @return map of groupId → sorted list of VariantDto
+     */
+    public Mono<Map<String, List<VariantDto>>> getVariantGroups(List<String> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+        List<String> distinct = groupIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (distinct.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+        return productRepository.findByGroupIdIn(distinct)
+                .collectMultimap(
+                        Product::getGroupId,
+                        p -> VariantDto.builder()
+                                .productId(p.getId())
+                                .sku(p.getSku())
+                                .size(p.getPackageSize())
+                                .price(p.getBasePrice())
+                                .inStock(p.getIsAvailable())
+                                .build()
+                )
+                .map(multimap -> multimap.entrySet().stream()
+                        .collect(Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> new ArrayList<>(e.getValue())
+                        )));
+    }
+
+    /**
+     * Returns all distinct group IDs with variant counts for admin discoverability.
+     * Used by GET /api/v1/catalog/products/groups.
+     */
+    public Flux<GroupSummary> getAllGroupSummaries() {
+        return productRepository.findAllGroupSummaries();
+    }
+
+    /**
+     * Returns the provided groupId if non-blank, otherwise auto-generates one from
+     * brand + base product name (trailing size/quantity stripped).
+     *
+     * Examples:
+     *   brand="Amul",   name="Taaza Milk 500ml"     → "amul-taaza-milk"
+     *   brand="Amul",   name="Taaza Milk 1 Litre"   → "amul-taaza-milk"
+     *   brand="Maggi",  name="2-Minute Noodles Pack of 4" → "maggi-2-minute-noodles"
+     *
+     * Static so ProductSyncService can reuse it without introducing a circular dependency.
+     */
+    public static String resolveGroupId(String explicitGroupId, String brand, String name) {
+        if (explicitGroupId != null && !explicitGroupId.isBlank()) {
+            return explicitGroupId.trim();
+        }
+        if (brand == null || brand.isBlank() || name == null || name.isBlank()) {
+            return null;
+        }
+        // Strip common trailing size/count patterns (end-anchored so "2-Minute" is preserved).
+        // Pass 1: standalone "Pack of N" suffix (no leading digit, e.g. "Eggs Pack of 6")
+        // Pass 2: numeric size suffixes (e.g. "500ml", "1 Litre", "12 pcs")
+        String baseName = name
+                .replaceAll("(?i)\\s+pack\\s+of\\s+\\d+\\s*$", "")
+                .replaceAll("(?i)\\s*\\d+(\\.\\d+)?\\s*(ml|l|litre|litres|g|gm|gms|kg|pcs?|pieces?)\\s*$", "")
+                .trim();
+        // Strip redundant brand prefix from name when the name already starts with the brand
+        // e.g. brand="Amul", name="Amul Butter" → baseName becomes "Butter", slug = "amul-butter"
+        String brandTrimmed = brand.trim();
+        if (baseName.toLowerCase().startsWith(brandTrimmed.toLowerCase())) {
+            String afterBrand = baseName.substring(brandTrimmed.length()).trim();
+            if (!afterBrand.isEmpty()) {
+                baseName = afterBrand;
+            }
+        }
+        return (brandTrimmed + "-" + baseName)
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-|-$", "");
     }
 }

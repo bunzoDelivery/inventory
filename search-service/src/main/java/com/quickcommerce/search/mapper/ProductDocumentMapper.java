@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Maps CatalogProductDto (catalog API contract) to ProductDocument (search index).
+ * Maps CatalogProductDto (catalog API contract) to ProductDocument (search
+ * index).
  */
 public final class ProductDocumentMapper {
 
@@ -23,6 +24,7 @@ public final class ProductDocumentMapper {
         return ProductDocument.builder()
                 .id(dto.getId())
                 .sku(dto.getSku())
+                .groupId(dto.getGroupId())
                 .name(dto.getName())
                 .brand(dto.getBrand())
                 .description(dto.getDescription())
